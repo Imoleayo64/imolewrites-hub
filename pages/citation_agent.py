@@ -37,8 +37,8 @@ if btn and api_key and draft_input:
         
         prompt = f"Read this text. Find sentences making technical claims that need citations. Return a list of short, highly specific search queries for those claims, separated by a pipe symbol '|'. Do not return the sentences, only the search queries. Text: {draft_input}"
         
-        # THE FIX: Added '-latest' to the model name
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={api_key}"
+        # THE FIX: Using the universally accessible 'gemini-pro' endpoint
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
         try:
@@ -84,4 +84,4 @@ if btn and api_key and draft_input:
             st.markdown(f"- {ref}")
 elif btn and not api_key:
     st.warning("Please paste your API key in the sidebar before clicking.")
-            
+        
