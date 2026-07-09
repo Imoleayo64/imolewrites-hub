@@ -4,40 +4,54 @@ import streamlit as st
 from collections import Counter
 
 st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
-st.title("🎓 ImoleWrites Autonomous Agent")
+st.title("🎓 ImoleWrites Citation Agent")
 
-# Simple, high-speed keyword extractor (No AI API needed!)
-def extract_keywords(text):
-    words = re.findall(r'\b[A-Za-z]{5,}\b', text) # Finds words with 5+ letters
-    common_words = {'which', 'their', 'these', 'would', 'could', 'should', 'about', 'after'}
-    filtered = [w for w in words if w.lower() not in common_words]
-    return " ".join([w for w, c in Counter(filtered).most_common(3)])
+def get_author_name(work):
+    # Safely get the first author's last name, or return 'Unknown'
+    try:
+        authors = work.get('authorships', [])
+        if authors and 'author' in authors[0]:
+            return authors[0]['author'].get('display_name', 'Unknown').split()[-1]
+    except:
+        pass
+    return "Unknown"
 
 draft_input = st.text_area("Paste manuscript segment:", height=300)
 btn = st.button("Cite Manuscript", type="primary")
 
 if btn and draft_input:
     with st.spinner("Sourcing..."):
-        # Process sentence by sentence
         sentences = re.split(r'(?<=[.!?])\s+', draft_input)
         final_text = ""
         all_refs = []
         
         for s in sentences:
-            # We look for claims by identifying technical words
-            keywords = extract_keywords(s)
-            url = f"https://api.openalex.org/works?search={keywords}&per-page=1&mailto=imolewriteshub@gmail.com"
-            res = requests.get(url).json()
+            # Skip short sentences that don't need citations
+            if len(s.split()) < 8:
+                final_text += f"{s} "
+                continue
+                
+            # Extract main topic
+            words = [w for w in re.findall(r'\b[A-Za-z]{5,}\b', s) if w.lower() not in {'which', 'their', 'these'}]
+            keywords = " ".join(words[:2])
             
-            # If the sentence is technical enough, add a citation
-            if res.get('results') and len(s.split()) > 10:
-                work = res['results'][0]
-                name = work['authorships'][0]['author']['display_name'].split()[-1]
-                year = work['publication_year']
-                cite = f"({name} et al., {year})"
-                final_text += f"{s} {cite} "
-                all_refs.append(f"{name} et al. ({year}). {work['title']}.")
-            else:
+            url = f"https://api.openalex.org/works?search={keywords}&per-page=1&mailto=imolewriteshub@gmail.com"
+            try:
+                res = requests.get(url).json()
+                work = res.get('results', [])[0] if res.get('results') else None
+                
+                if work:
+                    name = get_author_name(work)
+                    year = work.get('publication_year', 'n.d.')
+                    cite = f"({name} et al., {year})"
+                    title = work.get('title', 'No Title')
+                    source = work.get('primary_location', {}).get('source', {}).get('display_name', 'Journal')
+                    
+                    final_text += f"{s} {cite} "
+                    all_refs.append(f"{name} et al. ({year}). {title}. *{source}*.")
+                else:
+                    final_text += f"{s} "
+            except:
                 final_text += f"{s} "
 
         st.subheader("Final Manuscript:")
