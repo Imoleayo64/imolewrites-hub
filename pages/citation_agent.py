@@ -1,49 +1,47 @@
 import requests
 import re
 import streamlit as st
+import google.generativeai as genai
 
-st.set_page_config(page_title="ImoleWrites Citation Agent", layout="wide")
-st.title("🎓 ImoleWrites Citation Agent")
-st.markdown("Use '#' at the end of any sentence that needs a citation.")
+st.set_page_config(page_title="ImoleWrites AI Agent", layout="wide")
+st.title("🎓 ImoleWrites AI Research Agent")
 
-draft_input = st.text_area("Paste your manuscript:", height=300)
-cite_count = st.number_input("Citations per claim:", value=2)
-btn = st.button("Run Citation Agent", type="primary")
+# Setup Gemini
+api_key = st.sidebar.text_input("Enter your Gemini API Key:", type="password")
+if api_key:
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
-def get_ref(keywords, count):
-    url = f"https://api.openalex.org/works?search={keywords}&per-page={count}&mailto=imolewriteshub@gmail.com"
-    response = requests.get(url)
-    if response.status_code == 200:
-        results = response.json().get('results', [])
-        refs = []
-        in_text = []
-        for r in results:
-            year = r.get('publication_year', 'n.d.')
-            name = r.get('authorships', [{}])[0].get('author', {}).get('display_name', 'Unknown').split()[-1]
-            refs.append(f"{name} et al. ({year}). {r.get('title')}.")
-            in_text.append(f"{name} et al., {year}")
-        return in_text, refs
-    return ["[CITATION NEEDED]"], []
+def get_citations_from_ai(text):
+    prompt = f"Analyze the following manuscript text. Identify sentences that require academic citation. For each, provide the sentence and a perfect, short search query for an academic paper. Return as a list of 'Sentence | Query'. Text: {text}"
+    response = model.generate_content(prompt)
+    return response.text.split('\n')
 
-if btn and draft_input:
-    with st.spinner("Processing..."):
-        # Split by sentence to find the #
-        sentences = re.split(r'(?<=[.!?])\s+', draft_input)
-        updated_sentences = []
+draft_input = st.text_area("Paste manuscript here:", height=300)
+btn = st.button("Auto-Cite Manuscript", type="primary")
+
+if btn and api_key and draft_input:
+    with st.spinner("AI is reading and sourcing..."):
+        analysis = get_citations_from_ai(draft_input)
+        final_text = draft_input
         all_refs = []
         
-        for s in sentences:
-            if '#' in s:
-                # Extract keywords from the sentence itself
-                keywords = re.sub(r'[^a-zA-Z0-9\s]', '', s).split()[-5:]
-                in_text, refs = get_ref(" ".join(keywords), cite_count)
-                s = s.replace('#', f"({'; '.join(in_text)})")
-                all_refs.extend(refs)
-            updated_sentences.append(s)
-            
-        final_text = " ".join(updated_sentences)
+        for item in analysis:
+            if "|" in item:
+                sentence, query = item.split("|")
+                # Search OpenAlex
+                url = f"https://api.openalex.org/works?search={query.strip()}&per-page=1&mailto=imolewriteshub@gmail.com"
+                res = requests.get(url).json()
+                if res.get('results'):
+                    work = res['results'][0]
+                    name = work['authorships'][0]['author']['display_name'].split()[-1]
+                    year = work['publication_year']
+                    cite_str = f"({name} et al., {year})"
+                    final_text = final_text.replace(sentence.strip(), f"{sentence.strip()} {cite_str}")
+                    all_refs.append(f"{name} et al. ({year}). {work['title']}. *{work['primary_location']['source']['display_name']}*.")
+
         st.subheader("Final Manuscript:")
-        st.text_area("Result:", value=final_text, height=300)
+        st.write(final_text)
         st.subheader("Reference List:")
-        st.text_area("References:", value="\n\n".join(list(set(all_refs))), height=300)
+        st.write("\n\n".join(all_refs))
         
