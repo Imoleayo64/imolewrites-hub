@@ -1,47 +1,47 @@
 import requests
 import re
 import streamlit as st
-import google.generativeai as genai
+from collections import Counter
 
 st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
-st.title("🎓 ImoleWrites Citation Agent")
+st.title("🎓 ImoleWrites Autonomous Agent")
 
-# Sidebar for Key
-api_key = st.sidebar.text_input("Enter Gemini API Key:", type="password")
+# Simple, high-speed keyword extractor (No AI API needed!)
+def extract_keywords(text):
+    words = re.findall(r'\b[A-Za-z]{5,}\b', text) # Finds words with 5+ letters
+    common_words = {'which', 'their', 'these', 'would', 'could', 'should', 'about', 'after'}
+    filtered = [w for w in words if w.lower() not in common_words]
+    return " ".join([w for w, c in Counter(filtered).most_common(3)])
 
-if api_key:
-    genai.configure(api_key=api_key)
-    # Using 'gemini-pro' which is universally available
-    model = genai.GenerativeModel('gemini-pro')
-
-draft_input = st.text_area("Paste manuscript:", height=300)
+draft_input = st.text_area("Paste manuscript segment:", height=300)
 btn = st.button("Cite Manuscript", type="primary")
 
-if btn and api_key and draft_input:
-    with st.spinner("Analyzing and Sourcing..."):
-        # 1. Ask AI to find claims
-        prompt = f"Return only a list of sentences that need a citation from this text, separated by '|'. Text: {draft_input}"
-        response = model.generate_content(prompt)
-        sentences_to_cite = response.text.split('|')
-        
-        final_text = draft_input
+if btn and draft_input:
+    with st.spinner("Sourcing..."):
+        # Process sentence by sentence
+        sentences = re.split(r'(?<=[.!?])\s+', draft_input)
+        final_text = ""
         all_refs = []
         
-        # 2. Search OpenAlex for each claim
-        for sentence in sentences_to_cite:
-            query = sentence.strip()[:60] # Use sentence as search
-            url = f"https://api.openalex.org/works?search={query}&per-page=1&mailto=imolewriteshub@gmail.com"
+        for s in sentences:
+            # We look for claims by identifying technical words
+            keywords = extract_keywords(s)
+            url = f"https://api.openalex.org/works?search={keywords}&per-page=1&mailto=imolewriteshub@gmail.com"
             res = requests.get(url).json()
-            if res.get('results'):
+            
+            # If the sentence is technical enough, add a citation
+            if res.get('results') and len(s.split()) > 10:
                 work = res['results'][0]
                 name = work['authorships'][0]['author']['display_name'].split()[-1]
                 year = work['publication_year']
                 cite = f"({name} et al., {year})"
-                final_text = final_text.replace(sentence.strip(), f"{sentence.strip()} {cite}")
+                final_text += f"{s} {cite} "
                 all_refs.append(f"{name} et al. ({year}). {work['title']}.")
+            else:
+                final_text += f"{s} "
 
-        st.subheader("Finalized Manuscript:")
+        st.subheader("Final Manuscript:")
         st.write(final_text)
         st.subheader("Reference List:")
-        st.write("\n\n".join(all_refs))
+        st.write("\n\n".join(list(set(all_refs))))
         
