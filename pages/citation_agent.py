@@ -1,12 +1,10 @@
 import streamlit as st
 import requests
 import re
-import json
 
 st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
 st.title("🎓 ImoleWrites Smart Citing Agent")
 
-# Sidebar Configuration
 api_key = st.sidebar.text_input("Enter your Gemini API Key:", type="password")
 
 def get_real_journal(query):
@@ -37,16 +35,15 @@ btn = st.button("Auto-Cite Manuscript", type="primary")
 if btn and api_key and draft_input:
     with st.spinner("Reading manuscript and sourcing modern journals..."):
         
-        # 1. Direct connection to Gemini API (Bypassing buggy libraries)
         prompt = f"Read this text. Find sentences making technical claims that need citations. Return a list of short, highly specific search queries for those claims, separated by a pipe symbol '|'. Do not return the sentences, only the search queries. Text: {draft_input}"
         
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key={api_key}"
+        # THE FIX: Added '-latest' to the model name
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={api_key}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
         try:
             ai_response = requests.post(gemini_url, json=payload)
             if ai_response.status_code != 200:
-                # This will print the exact reason if Google rejects the key
                 error_msg = ai_response.json().get('error', {}).get('message', 'Unknown API Error')
                 st.error(f"Google API Error: {error_msg}")
                 st.stop()
@@ -61,7 +58,6 @@ if btn and api_key and draft_input:
         final_text = draft_input
         all_refs = []
         
-        # 2. Process Sentences
         sentences = re.split(r'(?<=[.!?])\s+', draft_input)
         processed_text = []
         
@@ -88,4 +84,4 @@ if btn and api_key and draft_input:
             st.markdown(f"- {ref}")
 elif btn and not api_key:
     st.warning("Please paste your API key in the sidebar before clicking.")
-    
+            
