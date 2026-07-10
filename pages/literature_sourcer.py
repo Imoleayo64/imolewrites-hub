@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import urllib.parse
 
 st.set_page_config(page_title="ImoleWrites Literature Sourcer", layout="wide", page_icon="📚")
 st.title("📚 ImoleWrites Literature Sourcer")
@@ -31,19 +30,27 @@ if btn_search:
         st.stop()
 
     with st.spinner("Scouring global academic databases for verified literature..."):
-        safe_query = urllib.parse.quote(search_query)
         
-        # Constructing the dynamic filters
+        # Constructing the dynamic filters for OpenAlex
         oa_filter = ",is_oa:true" if open_access else ""
         year_filter = f"publication_year:{year_range[0]}-{year_range[1]}"
         full_filter = f"{year_filter}{oa_filter},has_doi:true,type:journal-article"
         
         sort_param = "cited_by_count:desc" if impact_level == "High Impact (Most Cited)" else "relevance_score:desc"
         
-        url = f"https://api.openalex.org/works?default_search={safe_query}&filter={full_filter}&sort={sort_param}&per-page={num_results}&mailto=imolewriteshub@gmail.com"
+        # Using params dictionary for flawless URL encoding
+        params = {
+            "search": search_query,
+            "filter": full_filter,
+            "sort": sort_param,
+            "per-page": num_results,
+            "mailto": "imolewriteshub@gmail.com"
+        }
+        
+        url = "https://api.openalex.org/works"
         
         try:
-            res = requests.get(url, timeout=15).json()
+            res = requests.get(url, params=params, timeout=15).json()
             results = res.get('results', [])
             
             if not results:
@@ -63,7 +70,7 @@ if btn_search:
                     source = loc.get('source') or {}
                     journal = source.get('display_name') or 'Journal Title Missing'
                     
-                    # Safely extract authors for APA
+                    # Safely extract authors for APA formatting
                     authors = w.get('authorships', [])
                     author_names = []
                     for a in authors[:3]:
@@ -96,4 +103,4 @@ if btn_search:
                         
         except Exception as e:
             st.error(f"A connection error occurred: {str(e)}")
-
+                
