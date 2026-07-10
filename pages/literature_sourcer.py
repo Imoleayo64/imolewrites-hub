@@ -3,7 +3,7 @@ import requests
 
 st.set_page_config(page_title="ImoleWrites Literature Sourcer", layout="wide", page_icon="📚")
 st.title("📚 ImoleWrites Literature Sourcer")
-st.markdown("### Discover Verified Open Access & High-Impact Journals")
+st.markdown("### Discover Verified High-Impact Journals")
 
 # Search Parameters UI
 with st.container():
@@ -14,12 +14,10 @@ with st.container():
     with col2:
         num_results = st.number_input("Number of results to fetch:", min_value=1, max_value=50, value=10)
     
-    col3, col4, col5 = st.columns(3)
+    col3, col4 = st.columns(2)
     with col3:
         year_range = st.slider("Publication Year Range:", 2010, 2026, (2020, 2026))
     with col4:
-        open_access = st.checkbox("Require Open Access Only", value=True)
-    with col5:
         impact_level = st.selectbox("Journal Impact Level (Sort By):", ["Relevance (Best Match)", "High Impact (Most Cited)"])
 
 btn_search = st.button("Search Literature", type="primary", use_container_width=True)
@@ -29,58 +27,63 @@ if btn_search:
         st.warning("Please enter a research topic to search.")
         st.stop()
 
-    with st.spinner("Scouring global academic databases for verified literature..."):
+    with st.spinner("Scouring the global Crossref database for verified literature..."):
         
-        # Constructing the dynamic filters for OpenAlex
-        oa_filter = ",is_oa:true" if open_access else ""
-        year_filter = f"publication_year:{year_range[0]}-{year_range[1]}"
-        full_filter = f"{year_filter}{oa_filter},has_doi:true,type:journal-article"
-        
-        sort_param = "cited_by_count:desc" if impact_level == "High Impact (Most Cited)" else "relevance_score:desc"
-        
-        # Using params dictionary for flawless URL encoding
+        # Crossref fuzzy search parameters
         params = {
-            "search": search_query,
-            "filter": full_filter,
-            "sort": sort_param,
-            "per-page": num_results,
+            "query": search_query,
+            "filter": f"from-pub-date:{year_range[0]},until-pub-date:{year_range[1]},type:journal-article",
+            "select": "author,title,published,container-title,DOI,is-referenced-by-count",
+            "rows": num_results,
             "mailto": "imolewriteshub@gmail.com"
         }
         
-        url = "https://api.openalex.org/works"
+        if impact_level == "High Impact (Most Cited)":
+            params["sort"] = "is-referenced-by-count"
+            params["order"] = "desc"
+        else:
+            params["sort"] = "relevance"
+            params["order"] = "desc"
+            
+        url = "https://api.crossref.org/works"
         
         try:
             res = requests.get(url, params=params, timeout=15).json()
-            results = res.get('results', [])
+            items = res.get('message', {}).get('items', [])
             
-            if not results:
+            if not items:
                 st.info("No verified journals found matching those exact parameters. Try broadening your keywords.")
             else:
-                st.success(f"Successfully retrieved {len(results)} verified journals.")
+                st.success(f"Successfully retrieved {len(items)} verified journals.")
                 
-                for idx, w in enumerate(results):
-                    # Safely extract data
-                    title = w.get('title', 'No Title Available')
-                    pub_year = w.get('publication_year', 'n.d.')
-                    doi = w.get('doi', 'No DOI Available')
-                    citations = w.get('cited_by_count', 0)
-                    oa_status = "🔓 Open Access" if w.get('open_access', {}).get('is_oa') else "🔒 Paywalled"
+                for idx, w in enumerate(items):
+                    # Extract Data Safely
+                    title_list = w.get('title', ['No Title Available'])
+                    title = title_list[0] if title_list else 'No Title Available'
                     
-                    loc = w.get('primary_location') or {}
-                    source = loc.get('source') or {}
-                    journal = source.get('display_name') or 'Journal Title Missing'
+                    pub = w.get('published', {}).get('date-parts', [[None]])
+                    pub_year = pub[0][0] if pub and pub[0][0] else 'n.d.'
                     
-                    # Safely extract authors for APA formatting
-                    authors = w.get('authorships', [])
+                    doi = w.get('DOI', '')
+                    doi_url = f"https://doi.org/{doi}" if doi else "No DOI Available"
+                    
+                    citations = w.get('is-referenced-by-count', 0)
+                    
+                    journal_list = w.get('container-title', ['Journal Title Missing'])
+                    journal = journal_list[0] if journal_list else 'Journal Title Missing'
+                    
+                    # Format APA Authors
+                    authors = w.get('author', [])
                     author_names = []
-                    for a in authors[:3]:
-                        name_parts = a.get('author', {}).get('display_name', 'Unknown').split()
-                        if name_parts:
-                            last_name = name_parts[-1]
-                            initial = name_parts[0][0] + "." if len(name_parts) > 1 else ""
-                            author_names.append(f"{last_name}, {initial}")
+                    for a in authors[:5]: 
+                        last = a.get('family', 'Unknown')
+                        first = a.get('given', '')
+                        initial = first[0] + "." if first else ""
+                        clean_name = f"{last}, {initial}".strip(", ")
+                        if clean_name != "Unknown, ":
+                            author_names.append(clean_name)
                     
-                    if len(authors) > 3:
+                    if len(authors) > 5:
                         apa_authors = ", ".join(author_names) + ", et al."
                     elif len(author_names) > 1:
                         apa_authors = ", & ".join([", ".join(author_names[:-1]), author_names[-1]])
@@ -89,18 +92,18 @@ if btn_search:
                     else:
                         apa_authors = "Unknown Author"
                         
-                    apa_ref = f"{apa_authors} ({pub_year}). {title}. *{journal}*. {doi}"
+                    apa_ref = f"{apa_authors} ({pub_year}). {title}. *{journal}*. {doi_url}"
                     
                     # UI Display Cards
                     with st.container():
                         st.markdown(f"### {idx + 1}. {title}")
                         st.markdown(f"**Authors:** {apa_authors}")
                         st.markdown(f"**Journal:** {journal} | **Year:** {pub_year}")
-                        st.markdown(f"**Impact:** {citations} Citations | **Access:** {oa_status}")
-                        st.markdown(f"**DOI Link:** [{doi}]({doi})")
+                        st.markdown(f"**Impact:** {citations} Citations")
+                        st.markdown(f"**DOI Link:** [{doi_url}]({doi_url})")
                         st.code(apa_ref, language="markdown")
-                        st.markdown("---")
+                        st.markdown("___")
                         
         except Exception as e:
             st.error(f"A connection error occurred: {str(e)}")
-                
+                                                     
