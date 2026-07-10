@@ -1,10 +1,10 @@
 import streamlit as st
 import requests
-import re
+import json
 
 st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
 st.title("🎓 ImoleWrites Smart Citing Agent")
-st.markdown("Powered by Llama 3.3 - True Academic AI")
+st.markdown("Powered by Llama 3.3 - Strict JSON Academic Mode")
 
 # The Hybrid Key Grabber
 try:
@@ -49,7 +49,7 @@ if btn:
         st.warning("Please paste a manuscript draft first.")
         st.stop()
 
-    with st.spinner("AI is reading, editing, and determining optimal citation placements..."):
+    with st.spinner("AI is polishing grammar and actively sourcing real journals..."):
         
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -57,21 +57,33 @@ if btn:
             "Content-Type": "application/json"
         }
         
-        # The new prompt gives full editorial control to the AI
-        prompt = f"""You are an expert academic writer and analytical chemist. Review the following manuscript draft. 
-Task 1: Fix any awkward flow, grammar, or academic tone. Do NOT change the core meaning or the data. 
-Task 2: Keep ALL existing citations exactly as they are. 
-Task 3: Identify factual claims that LACK citations. For these, insert a placeholder exactly like this: [SEARCH: 4 to 6 specific chemistry keywords]. 
-Task 4: Do not insert more than 3 placeholders total per paragraph to avoid clutter. 
-Task 5: Return ONLY the revised manuscript text. Do not include conversational introductory or concluding text.
+        # We force Llama to return a JSON object so Python can perfectly extract the queries and the text
+        prompt = f"""You are an expert academic writer and analytical chemist. Review the manuscript below.
+1. Polish the academic tone, flow, and grammar. DO NOT use em-dashes anywhere in your response.
+2. Preserve ALL existing citations (e.g., Davey et al., 2007) exactly as they are.
+3. Identify new factual claims lacking citations. Insert a placeholder like [CITE_1], [CITE_2] where a new citation is needed. Maximum 3 new citations.
+4. Generate highly specific 4-6 keyword chemistry search queries for those placeholders.
+
+You MUST respond strictly in JSON format matching this exact structure:
+{{
+    "revised_text": "Your polished manuscript text containing the [CITE_X] placeholders...",
+    "queries": {{
+        "[CITE_1]": "specific chemistry search keywords",
+        "[CITE_2]": "specific chemistry search keywords"
+    }}
+}}
 
 Manuscript:
 {draft_input}"""
         
         payload = {
             "model": "llama-3.3-70b-versatile",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.2
+            "messages": [
+                {"role": "system", "content": "You are a JSON-only output machine."},
+                {"role": "user", "content": prompt}
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.1
         }
         
         try:
@@ -81,33 +93,36 @@ Manuscript:
                 st.error(f"API Error: {ai_res['error']['message']}")
                 st.stop()
                 
-            revised_text = ai_res['choices'][0]['message']['content'].strip()
+            # Safely load the JSON data the AI generated
+            ai_data = json.loads(ai_res['choices'][0]['message']['content'])
+            final_text = ai_data.get("revised_text", draft_input)
+            queries = ai_data.get("queries", {})
             
-            # Python now simply hunts for the tags the AI decided to place
             all_refs = []
-            search_tags = re.findall(r'\[SEARCH:\s*(.*?)\]', revised_text)
-            final_text = revised_text
             
-            for query in search_tags:
+            # Swap the [CITE_X] placeholders with real journals from OpenAlex
+            for tag, query in queries.items():
                 in_text, full_ref = get_real_journal(query)
                 if in_text:
-                    # Replace the specific tag with the OpenAlex citation
-                    final_text = final_text.replace(f"[SEARCH: {query}]", in_text, 1)
+                    final_text = final_text.replace(tag, in_text)
                     all_refs.append(full_ref)
                 else:
-                    # Clean up the tag if no journal was found
-                    final_text = final_text.replace(f" [SEARCH: {query}]", "", 1)
-                    final_text = final_text.replace(f"[SEARCH: {query}]", "", 1)
+                    final_text = final_text.replace(f" {tag}", "")
+                    final_text = final_text.replace(tag, "")
             
             st.subheader("Polished & Cited Manuscript:")
-            st.write(final_text)
+            st.info("Hover over the top right corner of the box below to copy the text.")
+            # st.code provides the exact 1-click copy icon you requested
+            st.code(final_text, language="text")
             
             if all_refs:
                 st.subheader("New Reference List:")
                 unique_refs = list(set(all_refs))
-                for ref in unique_refs:
-                    st.markdown(f"- {ref}")
-                    
+                refs_formatted = "\n".join([f"- {ref}" for ref in unique_refs])
+                st.code(refs_formatted, language="text")
+            else:
+                st.success("No additional citations were deemed necessary by the AI.")
+                
         except Exception as e:
             st.error(f"Processing error: {str(e)}")
-            
+                    
