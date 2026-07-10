@@ -4,12 +4,12 @@ import re
 
 st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
 st.title("🎓 ImoleWrites Smart Citing Agent")
-st.markdown("Powered by Gemini 2.0 - Autonomous Contextual Reading")
+st.markdown("Powered by Llama 3 - Autonomous Contextual Reading")
 
-api_key = st.sidebar.text_input("Enter your Gemini API Key:", type="password")
+api_key = st.sidebar.text_input("Enter your Groq API Key:", type="password")
 
 def get_real_journal(query):
-    # Strictly modern journals (post-2018)
+    # Strictly modern journals (post-2018) using your business email
     url = f"https://api.openalex.org/works?search={query}&filter=publication_year:>2018&per-page=1&mailto=imolewriteshub@gmail.com"
     try:
         res = requests.get(url, timeout=10).json()
@@ -38,24 +38,38 @@ btn = st.button("Auto-Cite Manuscript", type="primary")
 if btn and api_key and draft_input:
     with st.spinner("AI is analyzing your manuscript and sourcing modern journals..."):
         
-        prompt = f"Read this text. Ignore original analysis or opinion. Find ONLY factual scientific claims that require citations. Return a list of short, highly specific search queries for those claims, separated by a pipe symbol '|'. Do not return the sentences, only the search queries. Text: {draft_input}"
-        
-        # Switched to gemini-2.0-flash to bypass the Limit 0 billing trap
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        # Groq API connection using Llama 3 (70B parameter model for high intelligence)
+        groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "llama3-70b-8192",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are an expert academic research assistant. Read the text and ignore original analysis or opinion. Find ONLY factual scientific claims that require citations. Return a list of short, highly specific search queries for those claims, separated by a pipe symbol '|'. Do not return the sentences, only the search queries."
+                },
+                {
+                    "role": "user",
+                    "content": draft_input
+                }
+            ],
+            "temperature": 0.1
+        }
         
         try:
-            ai_response = requests.post(gemini_url, json=payload)
+            ai_response = requests.post(groq_url, headers=headers, json=payload)
             if ai_response.status_code != 200:
-                error_msg = ai_response.json().get('error', {}).get('message', 'Unknown API Error')
-                st.error(f"Google API Error: {error_msg}")
+                st.error("API Error: Please check your Groq API key.")
                 st.stop()
                 
             ai_data = ai_response.json()
-            ai_text = ai_data['candidates'][0]['content']['parts'][0]['text']
+            ai_text = ai_data['choices'][0]['message']['content']
             search_queries = [q.strip() for q in ai_text.split('|') if q.strip()]
         except Exception:
-            st.error("Network failed to connect to Google AI.")
+            st.error("Network failed to connect to the AI brain.")
             st.stop()
             
         processed_text = []
@@ -64,6 +78,7 @@ if btn and api_key and draft_input:
         sentences = re.split(r'(?<=[.!?])\s+', draft_input)
         
         for sentence in sentences:
+            # The AI determines if the sentence needs a citation
             if len(sentence.split()) > 8 and search_queries:
                 query = search_queries.pop(0)
                 in_text, full_ref = get_real_journal(query)
@@ -85,5 +100,5 @@ if btn and api_key and draft_input:
         for ref in unique_refs:
             st.markdown(f"- {ref}")
 elif btn and not api_key:
-    st.warning("Please paste your API key in the sidebar before clicking.")
-        
+    st.warning("Please paste your Groq API key in the sidebar before clicking.")
+    
