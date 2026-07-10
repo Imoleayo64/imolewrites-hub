@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import json
+import urllib.parse
 import streamlit.components.v1 as components
 
 st.set_page_config(page_title="ImoleWrites Hub", layout="wide", page_icon="🎓")
@@ -18,11 +19,12 @@ draft_input = st.text_area("Paste your un-cited or partially cited manuscript he
 btn = st.button("Auto-Cite & Generate Bibliography", type="primary")
 
 def fetch_verified_journal(query):
-    # 2020-2026 Open Access Verified Journals
-    url = f"https://api.openalex.org/works?search={query}&filter=publication_year:>2019,is_oa:true&sort=relevance_score:desc&per-page=1&mailto=imolewriteshub@gmail.com"
+    # Ensure the query is URL-safe and filter for 2020-2026 Open Access
+    safe_query = urllib.parse.quote(query)
+    url = f"https://api.openalex.org/works?default_search={safe_query}&filter=publication_year:>2019,has_doi:true&sort=relevance_score:desc&per-page=1&mailto=imolewriteshub@gmail.com"
     try:
         res = requests.get(url, timeout=10).json()
-        if res.get('results'):
+        if res.get('results') and len(res['results']) > 0:
             w = res['results'][0]
             
             authors = w.get('authorships', [])
@@ -65,7 +67,7 @@ if btn:
         st.warning("Please paste a manuscript draft first.")
         st.stop()
 
-    with st.spinner("Processing manuscript paragraph by paragraph to ensure zero claims are missed..."):
+    with st.spinner("Processing manuscript and fetching verified 2020-2026 journals..."):
         
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -73,30 +75,28 @@ if btn:
             "Content-Type": "application/json"
         }
         
-        # 1. Split the manuscript into distinct paragraphs
         paragraphs = [p.strip() for p in draft_input.split('\n') if p.strip()]
         final_processed_paragraphs = []
         all_refs = []
         
-        # 2. Force the AI to read and cite each paragraph individually
         for para in paragraphs:
-            # Skip short headings or single sentences to save time
             if len(para.split()) < 10:
                 final_processed_paragraphs.append(para)
                 continue
                 
+            # The prompt now forces short queries and mandatory citations
             prompt = f"""You are the lead academic editor for the ImoleWrites Research Hub.
-Process ONLY this specific paragraph.
-1. Polish the academic tone. Paraphrase slightly to ensure a natural human tone. DO NOT use em dashes.
-2. Preserve any existing citations (e.g., Author, Year).
-3. You MUST identify factual scientific claims that LACK citations and insert placeholders like [CITE_1], [CITE_2]. 
-4. Generate highly specific 5 to 7 keyword search queries for those placeholders.
+Process ONLY this specific paragraph. Every paragraph submitted to you requires new literature backing.
+
+1. Polish the academic tone slightly to ensure a natural human tone. DO NOT use em dashes.
+2. You MUST identify factual scientific claims and insert AT LEAST ONE placeholder (like [CITE_1]) into the text. 
+3. Generate highly concise 2 to 3 keyword search queries for those placeholders (e.g., "mass spectrometry", "BPA leachate"). Broad keywords work best.
 
 You MUST respond strictly in JSON format matching this exact structure:
 {{
     "revised_text": "Your polished paragraph containing the [CITE_X] placeholders...",
     "queries": {{
-        "[CITE_1]": "specific scientific search keywords"
+        "[CITE_1]": "2 to 3 concise keywords"
     }}
 }}
 
@@ -130,24 +130,22 @@ Paragraph to process:
                             revised_para = revised_para.replace(tag, in_text)
                             all_refs.append(apa_ref)
                         else:
-                            revised_para = revised_para.replace(f" {tag}", "")
-                            revised_para = revised_para.replace(tag, "")
+                            # If OpenAlex fails, we no longer hide it. We show you exactly what it searched for.
+                            revised_para = revised_para.replace(tag, f"[Manual Citation Needed: {query}]")
                             
                 final_processed_paragraphs.append(revised_para)
             except Exception:
                 final_processed_paragraphs.append(para)
             
-        # 3. Stitch the fully cited paragraphs back together
         final_text_assembled = "\n\n".join(final_processed_paragraphs)
         
-        # 4. Generate the complete APA Bibliography
         display_text = final_text_assembled + "\n\nReferences\n"
         if all_refs:
             unique_refs = sorted(list(set(all_refs)))
             for ref in unique_refs:
                 display_text += f"{ref}\n\n"
         else:
-            display_text += "No additional references were sourced for this text."
+            display_text += "No valid Open Access references were found for the generated queries."
 
         html_code = f"""
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; padding: 25px; border-radius: 8px; border: 1px solid #dee2e6; color: #212529; line-height: 1.8; font-size: 16px; white-space: pre-wrap; margin-bottom: 15px;" id="imole-output">
@@ -161,4 +159,4 @@ Paragraph to process:
         
         st.subheader("Final Output")
         components.html(html_code, height=600, scrolling=True)
-                            
+            
