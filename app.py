@@ -7,9 +7,22 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Advanced CSS with clickable routing and brighter gradients
+# Advanced Global CSS & UI/UX Beautification
 st.markdown("""
     <style>
+    /* Import the Poppins Font from your portfolio */
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+    
+    /* Apply Font to everything */
+    html, body, [class*="css"] {
+        font-family: 'Poppins', sans-serif;
+    }
+
+    /* Hide Streamlit Default Watermarks & Menus */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
     /* Brighter gradient for both Light and Dark mode visibility */
     .main-header {
         font-size: 3rem;
@@ -70,9 +83,30 @@ st.markdown("""
         color: var(--text-color);
         opacity: 0.85;
     }
+
+    /* Sidebar Profile Card Button Hover */
+    .profile-btn:hover {
+        opacity: 0.9;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(59, 130, 246, 0.3) !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
+# ---------------- SIDEBAR: ABOUT THE DEVELOPER ----------------
+st.sidebar.markdown("### Developer Profile")
+st.sidebar.markdown("""
+<div style="text-align: center; margin-top: 10px; padding: 20px; background-color: var(--secondary-background-color); border-radius: 12px; border: 1px solid rgba(128, 128, 128, 0.2);">
+    <img src="https://imoleayo64.github.io/my_portfolio/profile.jpg" width="110" style="border-radius: 50%; border: 3px solid #3B82F6; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 15px; object-fit: cover;">
+    <h3 style="margin-top: 0px; margin-bottom: 5px; font-size: 1.2rem; font-weight: 700; color: #3B82F6;">Ibrahim Ajala</h3>
+    <p style="font-size: 0.85rem; color: var(--text-color); opacity: 0.8; margin-bottom: 15px; line-height: 1.4;">AI Software Engineer & Product Designer</p>
+    <a href="https://imoleayo64.github.io/my_portfolio/" target="_blank" class="profile-btn" style="background-color: #3B82F6; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.9rem; display: inline-block; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.2);">Visit Portfolio</a>
+</div>
+""", unsafe_allow_html=True)
+st.sidebar.markdown("---")
+
+
+# ---------------- MAIN APPLICATION PAGE ----------------
 # Hero Section
 st.markdown('<div class="main-header">ImoleWrites Research Hub 🎓</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Your Complete Suite for Academic Excellence</div>', unsafe_allow_html=True)
@@ -130,3 +164,4 @@ st.markdown("___")
 # Footer Context
 st.markdown("#### Need Assistance or Custom Services?")
 st.write("For technical support, custom manuscript reviews, paper publications or business inquiries, reach out directly to **imolewriteshub@gmail.com**.")
+    
