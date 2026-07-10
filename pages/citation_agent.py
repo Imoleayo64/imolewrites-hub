@@ -4,7 +4,7 @@ import re
 
 st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
 st.title("🎓 ImoleWrites Smart Citing Agent")
-st.markdown("Powered by Gemini 2.5 Pro - Autonomous Contextual Reading")
+st.markdown("Powered by Gemini 2.0 - Autonomous Contextual Reading")
 
 api_key = st.sidebar.text_input("Enter your Gemini API Key:", type="password")
 
@@ -38,10 +38,10 @@ btn = st.button("Auto-Cite Manuscript", type="primary")
 if btn and api_key and draft_input:
     with st.spinner("AI is analyzing your manuscript and sourcing modern journals..."):
         
-        # Using your officially approved Gemini 2.5 Pro model
         prompt = f"Read this text. Ignore original analysis or opinion. Find ONLY factual scientific claims that require citations. Return a list of short, highly specific search queries for those claims, separated by a pipe symbol '|'. Do not return the sentences, only the search queries. Text: {draft_input}"
         
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={api_key}"
+        # Switched to gemini-2.0-flash to bypass the Limit 0 billing trap
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
         try:
@@ -65,7 +65,6 @@ if btn and api_key and draft_input:
         
         for sentence in sentences:
             if len(sentence.split()) > 8 and search_queries:
-                # The AI provides the exact search query based on context
                 query = search_queries.pop(0)
                 in_text, full_ref = get_real_journal(query)
                 
@@ -87,4 +86,4 @@ if btn and api_key and draft_input:
             st.markdown(f"- {ref}")
 elif btn and not api_key:
     st.warning("Please paste your API key in the sidebar before clicking.")
-            
+        
