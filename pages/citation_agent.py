@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import json
-import urllib.parse
 import streamlit.components.v1 as components
 
 st.set_page_config(page_title="ImoleWrites Hub", layout="wide", page_icon="🎓")
@@ -19,22 +18,32 @@ draft_input = st.text_area("Paste your un-cited or partially cited manuscript he
 btn = st.button("Auto-Cite & Generate Bibliography", type="primary")
 
 def fetch_verified_journal(query):
-    safe_query = urllib.parse.quote(query)
-    # Broadest possible search for recent papers, sorted by relevance
-    url = f"https://api.openalex.org/works?search={safe_query}&filter=publication_year:>2019&sort=relevance_score:desc&per-page=1&mailto=imolewriteshub@gmail.com"
+    url = "https://api.openalex.org/works"
+    
+    # Using a params dictionary guarantees perfect URL encoding for spaces and symbols
+    params = {
+        "default_search": query,
+        "filter": "publication_year:>2019",
+        "sort": "relevance_score:desc",
+        "per-page": 1,
+        "mailto": "imolewriteshub@gmail.com"
+    }
     
     try:
-        res = requests.get(url, timeout=10).json()
+        res = requests.get(url, params=params, timeout=10).json()
         
-        # Fallback search if the first one somehow returns absolutely nothing
+        # Fallback search if the strict 2020+ filter blocks a rare, highly specific query
         if not res.get('results'):
-            fallback_url = f"https://api.openalex.org/works?search={safe_query}&per-page=1&mailto=imolewriteshub@gmail.com"
-            res = requests.get(fallback_url, timeout=10).json()
+            fallback_params = {
+                "default_search": query,
+                "per-page": 1,
+                "mailto": "imolewriteshub@gmail.com"
+            }
+            res = requests.get(url, params=fallback_params, timeout=10).json()
 
         if res.get('results') and len(res['results']) > 0:
             w = res['results'][0]
             
-            # Safely extract authors
             authors = w.get('authorships', [])
             author_names = []
             for a in authors[:3]:
@@ -60,7 +69,6 @@ def fetch_verified_journal(query):
             year = w.get('publication_year', 'n.d.')
             title = w.get('title', 'No Title Available')
             
-            # THE BUG FIX: Safely handling missing journal names so the code never crashes
             loc = w.get('primary_location') or {}
             source = loc.get('source') or {}
             journal = source.get('display_name') or 'Journal Title Missing'
@@ -71,7 +79,7 @@ def fetch_verified_journal(query):
             apa_ref = f"{apa_authors} ({year}). {title}. *{journal}*. {doi}"
             
             return in_text, apa_ref
-    except Exception as e:
+    except Exception:
         pass
     return None, None
 
@@ -170,4 +178,4 @@ Paragraph to process:
         
         st.subheader("Final Output")
         components.html(html_code, height=600, scrolling=True)
-        
+                    
