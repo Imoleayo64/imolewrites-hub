@@ -4,7 +4,7 @@ import re
 
 st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
 st.title("🎓 ImoleWrites Smart Citing Agent")
-st.markdown("Powered by Llama 3.3 - Autonomous Multi-Contextual Reading")
+st.markdown("Powered by Llama 3.3 - True Academic AI")
 
 # The Hybrid Key Grabber
 try:
@@ -13,9 +13,8 @@ except Exception:
     raw_key = st.sidebar.text_input("Secret not found. Enter Groq API Key here:", type="password", key="groq_fallback")
     api_key = raw_key.strip() if raw_key else ""
 
-# Draw the UI immediately
 draft_input = st.text_area("Paste your manuscript draft here:", height=300)
-btn = st.button("Auto-Cite Manuscript", type="primary")
+btn = st.button("Auto-Cite & Polish Manuscript", type="primary")
 
 def get_real_journal(query):
     # Strictly modern journals (post-2018)
@@ -50,7 +49,7 @@ if btn:
         st.warning("Please paste a manuscript draft first.")
         st.stop()
 
-    with st.spinner("Applying strict academic formatting and sourcing references..."):
+    with st.spinner("AI is reading, editing, and determining optimal citation placements..."):
         
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -58,73 +57,57 @@ if btn:
             "Content-Type": "application/json"
         }
         
-        processed_text = []
-        all_refs = []
+        # The new prompt gives full editorial control to the AI
+        prompt = f"""You are an expert academic writer and analytical chemist. Review the following manuscript draft. 
+Task 1: Fix any awkward flow, grammar, or academic tone. Do NOT change the core meaning or the data. 
+Task 2: Keep ALL existing citations exactly as they are. 
+Task 3: Identify factual claims that LACK citations. For these, insert a placeholder exactly like this: [SEARCH: 4 to 6 specific chemistry keywords]. 
+Task 4: Do not insert more than 3 placeholders total per paragraph to avoid clutter. 
+Task 5: Return ONLY the revised manuscript text. Do not include conversational introductory or concluding text.
+
+Manuscript:
+{draft_input}"""
         
-        sentences = re.split(r'(?<=[.!?])\s+', draft_input)
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2
+        }
         
-        for sentence in sentences:
-            # Count actual alphabetical words to skip numbers like "1." or "1.1"
-            word_count = len(re.findall(r'\b[a-zA-Z]+\b', sentence))
+        try:
+            ai_res = requests.post(groq_url, headers=headers, json=payload).json()
             
-            # Check if the sentence already contains a citation format
-            has_citation = bool(re.search(r'\([A-Za-z\s&]+,\s*\d{4}\)', sentence))
+            if 'error' in ai_res:
+                st.error(f"API Error: {ai_res['error']['message']}")
+                st.stop()
+                
+            revised_text = ai_res['choices'][0]['message']['content'].strip()
             
-            if word_count > 6 and not has_citation:
-                prompt = f"""You are an expert in analytical and environmental chemistry. Evaluate this manuscript sentence: "{sentence.strip()}"
-If it makes a factual scientific claim needing validation, generate 1 or 2 (maximum 2) highly distinct search queries for it. 
-Separate queries strictly using a pipe symbol '|'. Each query must be 4 to 6 keywords long and contain chemistry domain keywords.
-If the sentence is an original deduction, a section heading, or needs no citation, reply ONLY with the word NO."""
-                
-                payload = {
-                    "model": "llama-3.3-70b-versatile",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.0
-                }
-                
-                try:
-                    ai_res = requests.post(groq_url, headers=headers, json=payload).json()
+            # Python now simply hunts for the tags the AI decided to place
+            all_refs = []
+            search_tags = re.findall(r'\[SEARCH:\s*(.*?)\]', revised_text)
+            final_text = revised_text
+            
+            for query in search_tags:
+                in_text, full_ref = get_real_journal(query)
+                if in_text:
+                    # Replace the specific tag with the OpenAlex citation
+                    final_text = final_text.replace(f"[SEARCH: {query}]", in_text, 1)
+                    all_refs.append(full_ref)
+                else:
+                    # Clean up the tag if no journal was found
+                    final_text = final_text.replace(f" [SEARCH: {query}]", "", 1)
+                    final_text = final_text.replace(f"[SEARCH: {query}]", "", 1)
+            
+            st.subheader("Polished & Cited Manuscript:")
+            st.write(final_text)
+            
+            if all_refs:
+                st.subheader("New Reference List:")
+                unique_refs = list(set(all_refs))
+                for ref in unique_refs:
+                    st.markdown(f"- {ref}")
                     
-                    if 'error' in ai_res:
-                        st.error(f"API Error: {ai_res['error']['message']}")
-                        st.stop()
-                        
-                    ai_text = ai_res['choices'][0]['message']['content'].strip().replace('"', '')
-                    
-                    if ai_text != "NO" and not ai_text.upper().startswith("NO"):
-                        # Hard limit to 2 queries maximum
-                        queries = [q.strip() for q in ai_text.split('|') if q.strip()][:2]
-                        sentence_citations = []
-                        
-                        for query in queries:
-                            in_text, full_ref = get_real_journal(query)
-                            if in_text:
-                                citation_content = in_text.strip("()")
-                                # Prevent duplicates in the same bracket
-                                if citation_content not in sentence_citations:
-                                    sentence_citations.append(citation_content)
-                                    all_refs.append(full_ref)
-                        
-                        if sentence_citations:
-                            combined_citation = f"({'; '.join(sentence_citations)})"
-                            clean_sentence = sentence.rstrip('.!?')
-                            processed_text.append(f"{clean_sentence} {combined_citation}.")
-                        else:
-                            processed_text.append(sentence)
-                    else:
-                        processed_text.append(sentence)
-                except Exception:
-                    processed_text.append(sentence)
-            else:
-                # Passes existing citations, headings, and numbers straight through
-                processed_text.append(sentence)
-                
-        st.subheader("Finalized Manuscript:")
-        st.write(" ".join(processed_text))
-        
-        if all_refs:
-            st.subheader("Reference List:")
-            unique_refs = list(set(all_refs))
-            for ref in unique_refs:
-                st.markdown(f"- {ref}")
+        except Exception as e:
+            st.error(f"Processing error: {str(e)}")
             
