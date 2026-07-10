@@ -18,10 +18,8 @@ st.markdown("""
         font-family: 'Poppins', sans-serif;
     }
 
-    /* Hide Streamlit Default Watermarks & Menus */
-    #MainMenu {visibility: hidden;}
+    /* Hide ONLY the Streamlit Footer Watermark to preserve mobile navigation */
     footer {visibility: hidden;}
-    header {visibility: hidden;}
 
     /* Brighter gradient for both Light and Dark mode visibility */
     .main-header {
@@ -41,7 +39,7 @@ st.markdown("""
         margin-bottom: 35px;
     }
 
-    /* Make the links invisible so they don't mess up the text */
+    /* Make the links invisible so they do not mess up the text */
     a.card-link {
         text-decoration: none !important;
         color: inherit !important;
@@ -59,11 +57,11 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
         cursor: pointer;
         
-        /* Snappy, elastic transition */
+        /* Snappy elastic transition */
         transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, border-left-color 0.2s ease;
     }
 
-    /* The Hover Effect - Popping up and glowing */
+    /* The Hover Effect: Popping up and glowing */
     .feature-card:hover {
         transform: translateY(-6px) scale(1.02);
         border-left-color: #60A5FA;
@@ -93,7 +91,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ---------------- SIDEBAR: ABOUT THE DEVELOPER ----------------
+# ================ SIDEBAR: ABOUT THE DEVELOPER ================
 st.sidebar.markdown("### Developer Profile")
 st.sidebar.markdown("""
 <div style="text-align: center; margin-top: 10px; padding: 20px; background-color: var(--secondary-background-color); border-radius: 12px; border: 1px solid rgba(128, 128, 128, 0.2);">
@@ -106,7 +104,7 @@ st.sidebar.markdown("""
 st.sidebar.markdown("---")
 
 
-# ---------------- MAIN APPLICATION PAGE ----------------
+# ================ MAIN APPLICATION PAGE ================
 # Hero Section
 st.markdown('<div class="main-header">ImoleWrites Research Hub 🎓</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Your Complete Suite for Academic Excellence</div>', unsafe_allow_html=True)
@@ -164,4 +162,3 @@ st.markdown("___")
 # Footer Context
 st.markdown("#### Need Assistance or Custom Services?")
 st.write("For technical support, custom manuscript reviews, paper publications or business inquiries, reach out directly to **imolewriteshub@gmail.com**.")
-    
