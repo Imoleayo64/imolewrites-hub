@@ -23,16 +23,14 @@ if btn_convert:
     with st.spinner(f"Restructuring and converting to {target_style}..."):
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         
-        # The prompt now forces structural extraction first
         prompt = f"""You are a senior academic bibliographer. 
 Your goal is to reformat the provided bibliography list into strict {target_style} style.
 
-1. First, parse each reference to identify the Authors, Year, Title, Journal/Source, Volume, Issue, Pages, and DOI.
-2. Discard all old formatting.
-3. Reconstruct each reference using ONLY {target_style} standards. 
-4. If converting to Vancouver, ensure the list is numbered (1., 2., 3., etc.).
-5. DO NOT use em dashes.
-6. Return the finished, properly formatted list.
+1. Parse each reference to identify the Authors, Year, Title, Journal, Volume, Issue, Pages, and DOI.
+2. Reconstruct each reference using ONLY {target_style} standards. 
+3. If converting to Vancouver, ensure the list is numbered (1., 2., 3., etc.).
+4. DO NOT use em dashes.
+5. Output ONLY the properly formatted bibliography list.
 
 Bibliography to convert:
 {ref_input}"""
@@ -44,12 +42,20 @@ Bibliography to convert:
         }
         
         try:
-            response = requests.post(groq_url, headers={"Authorization": f"Bearer {api_key}"}, json=payload).json()
-            converted_text = response['choices'][0]['message']['content']
+            response = requests.post(groq_url, headers={"Authorization": f"Bearer {api_key}"}, json=payload)
+            data = response.json()
             
-            st.subheader(f"Formatted {target_style} Bibliography")
-            st.text_area("Result:", value=converted_text, height=300)
-            st.download_button("Download Formatted Bibliography", converted_text, f"bibliography_{target_style}.txt")
+            # The Critical Check: Ensure 'choices' exists
+            if 'choices' in data:
+                converted_text = data['choices'][0]['message']['content']
+                st.subheader(f"Formatted {target_style} Bibliography")
+                st.text_area("Result:", value=converted_text, height=300)
+                st.download_button("Download Formatted Bibliography", converted_text, f"bibliography_{target_style}.txt")
+            elif 'error' in data:
+                st.error(f"API Provider Error: {data['error']['message']}")
+            else:
+                st.error(f"Unexpected response format: {data}")
+                
         except Exception as e:
-            st.error(f"Formatting engine error: {e}")
+            st.error(f"Formatting engine error: {str(e)}")
             
