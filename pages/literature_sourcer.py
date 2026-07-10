@@ -1,13 +1,6 @@
 import streamlit as st
 import requests
-
-# Add this check before your spinner
-if btn_convert:
-    # 1. Check your current usage (Groq provides this via their API/Dashboard)
-    # 2. If usage > 95000, trigger this warning:
-    st.warning("The ImoleWrites processing capacity is currently refreshing. Please try again in 1 hour.")
-    st.stop()
-    
+   
 st.set_page_config(page_title="ImoleWrites Literature Sourcer", layout="wide", page_icon="📚")
 st.title("📚 ImoleWrites Literature Sourcer")
 st.markdown("### Discover Verified High-Impact Journals")
