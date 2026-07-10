@@ -4,7 +4,7 @@ import re
 
 st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
 st.title("🎓 ImoleWrites Smart Citing Agent")
-st.markdown("Powered by Llama 3 - Autonomous Contextual Reading")
+st.markdown("Powered by Llama 3.3 - Autonomous Contextual Reading")
 
 # Strip invisible spaces from the pasted key
 raw_key = st.sidebar.text_input("Enter your Groq API Key:", type="password")
@@ -40,14 +40,14 @@ btn = st.button("Auto-Cite Manuscript", type="primary")
 if btn and api_key and draft_input:
     with st.spinner("AI is analyzing your manuscript and sourcing modern journals..."):
         
-        # Groq API connection using Llama 3
+        # Groq API connection using the active Llama 3.3 model
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "llama3-70b-8192",
+            "model": "llama-3.3-70b-versatile", # THE FIX IS HERE
             "messages": [
                 {
                     "role": "system",
@@ -64,7 +64,6 @@ if btn and api_key and draft_input:
         try:
             ai_response = requests.post(groq_url, headers=headers, json=payload)
             if ai_response.status_code != 200:
-                # Force the app to show exactly what Groq is complaining about
                 st.error(f"Groq API Error ({ai_response.status_code}): {ai_response.text}")
                 st.stop()
                 
@@ -103,4 +102,4 @@ if btn and api_key and draft_input:
             st.markdown(f"- {ref}")
 elif btn and not api_key:
     st.warning("Please paste your Groq API key in the sidebar before clicking.")
-                         
+    
