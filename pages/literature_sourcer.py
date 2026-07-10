@@ -5,105 +5,56 @@ st.set_page_config(page_title="ImoleWrites Literature Sourcer", layout="wide", p
 st.title("📚 ImoleWrites Literature Sourcer")
 st.markdown("### Discover Verified High-Impact Journals")
 
-# Search Parameters UI
 with st.container():
-    st.markdown("#### Search Parameters")
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        search_query = st.text_input("Enter your research topic or keywords (e.g., 'bisphenol A landfill leachate'):")
-    with col2:
-        num_results = st.number_input("Number of results to fetch:", min_value=1, max_value=50, value=10)
-    
+    search_query = st.text_input("Enter your research topic:")
+    num_results = st.number_input("Number of results to fetch:", min_value=1, max_value=50, value=10)
     col3, col4 = st.columns(2)
     with col3:
-        year_range = st.slider("Publication Year Range:", 2010, 2026, (2020, 2026))
+        year_range = st.slider("Year Range:", 2010, 2026, (2020, 2026))
     with col4:
-        impact_level = st.selectbox("Journal Impact Level (Sort By):", ["Relevance (Best Match)", "High Impact (Most Cited)"])
-
-btn_search = st.button("Search Literature", type="primary", use_container_width=True)
+        impact_level = st.selectbox("Sort By:", ["Relevance", "Citations"])
+    
+    btn_search = st.button("Search Literature", type="primary", use_container_width=True)
 
 if btn_search:
-    if not search_query.strip():
-        st.warning("Please enter a research topic to search.")
-        st.stop()
-
-    with st.spinner("Scouring the global Crossref database for verified literature..."):
-        
-        # Crossref fuzzy search parameters
+    with st.spinner("Fetching data..."):
         params = {
             "query": search_query,
             "filter": f"from-pub-date:{year_range[0]},until-pub-date:{year_range[1]},type:journal-article",
-            "select": "author,title,published,container-title,DOI,is-referenced-by-count",
+            "select": "author,title,published,container-title,DOI,is-referenced-by-count,ISSN",
             "rows": num_results,
+            "sort": "is-referenced-by-count" if impact_level == "Citations" else "relevance",
+            "order": "desc",
             "mailto": "imolewriteshub@gmail.com"
         }
         
-        if impact_level == "High Impact (Most Cited)":
-            params["sort"] = "is-referenced-by-count"
-            params["order"] = "desc"
-        else:
-            params["sort"] = "relevance"
-            params["order"] = "desc"
-            
-        url = "https://api.crossref.org/works"
-        
         try:
-            res = requests.get(url, params=params, timeout=15).json()
+            res = requests.get("https://api.crossref.org/works", params=params, timeout=15).json()
             items = res.get('message', {}).get('items', [])
             
-            if not items:
-                st.info("No verified journals found matching those exact parameters. Try broadening your keywords.")
-            else:
-                st.success(f"Successfully retrieved {len(items)} verified journals.")
+            bib_data = ""
+            txt_data = ""
+            
+            for w in items:
+                title = w.get('title', ['No Title'])[0]
+                authors = [f"{a.get('family', 'Unknown')}" for a in w.get('author', [])[:2]]
+                author_str = ", ".join(authors) + " et al." if len(w.get('author', [])) > 2 else ", ".join(authors)
+                year = w.get('published', {}).get('date-parts', [[2020]])[0][0]
+                doi = w.get('DOI', '')
                 
-                for idx, w in enumerate(items):
-                    # Extract Data Safely
-                    title_list = w.get('title', ['No Title Available'])
-                    title = title_list[0] if title_list else 'No Title Available'
-                    
-                    pub = w.get('published', {}).get('date-parts', [[None]])
-                    pub_year = pub[0][0] if pub and pub[0][0] else 'n.d.'
-                    
-                    doi = w.get('DOI', '')
-                    doi_url = f"https://doi.org/{doi}" if doi else "No DOI Available"
-                    
-                    citations = w.get('is-referenced-by-count', 0)
-                    
-                    journal_list = w.get('container-title', ['Journal Title Missing'])
-                    journal = journal_list[0] if journal_list else 'Journal Title Missing'
-                    
-                    # Format APA Authors
-                    authors = w.get('author', [])
-                    author_names = []
-                    for a in authors[:5]: 
-                        last = a.get('family', 'Unknown')
-                        first = a.get('given', '')
-                        initial = first[0] + "." if first else ""
-                        clean_name = f"{last}, {initial}".strip(", ")
-                        if clean_name != "Unknown, ":
-                            author_names.append(clean_name)
-                    
-                    if len(authors) > 5:
-                        apa_authors = ", ".join(author_names) + ", et al."
-                    elif len(author_names) > 1:
-                        apa_authors = ", & ".join([", ".join(author_names[:-1]), author_names[-1]])
-                    elif author_names:
-                        apa_authors = author_names[0]
-                    else:
-                        apa_authors = "Unknown Author"
-                        
-                    apa_ref = f"{apa_authors} ({pub_year}). {title}. *{journal}*. {doi_url}"
-                    
-                    # UI Display Cards
-                    with st.container():
-                        st.markdown(f"### {idx + 1}. {title}")
-                        st.markdown(f"**Authors:** {apa_authors}")
-                        st.markdown(f"**Journal:** {journal} | **Year:** {pub_year}")
-                        st.markdown(f"**Impact:** {citations} Citations")
-                        st.markdown(f"**DOI Link:** [{doi_url}]({doi_url})")
-                        st.code(apa_ref, language="markdown")
-                        st.markdown("___")
-                        
+                # BibTeX Format
+                bib_data += f"@article{{ref{doi.replace('/', '_')},\n  author = {{{author_str}}},\n  title = {{{title}}},\n  year = {{{year}}},\n  doi = {{{doi}}}\n}}\n\n"
+                txt_data += f"{author_str} ({year}). {title}. DOI: {doi}\n\n"
+
+            # Export Buttons
+            colA, colB = st.columns(2)
+            colA.download_button("Download .bib (BibTeX)", bib_data, "references.bib", "text/x-bibtex")
+            colB.download_button("Download .txt (APA)", txt_data, "references.txt", "text/plain")
+
+            for idx, w in enumerate(items):
+                st.markdown(f"### {idx+1}. {w.get('title', [''])[0]}")
+                st.code(txt_data.split('\n\n')[idx], language="markdown")
+                st.markdown("---")
         except Exception as e:
-            st.error(f"A connection error occurred: {str(e)}")
-                                                     
+            st.error(f"Error: {e}")
+            
