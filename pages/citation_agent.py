@@ -1,14 +1,13 @@
 import streamlit as st
 import requests
 import json
-import re
 import streamlit.components.v1 as components
 
 st.set_page_config(page_title="ImoleWrites Hub", layout="wide", page_icon="🎓")
 st.title("🎓 ImoleWrites Research Hub")
 st.markdown("### Core Engine: Contextual Citation & APA Bibliography")
 
-# Invisible Backend Key (Users will never see this)
+# Invisible Backend Key
 try:
     api_key = st.secrets["GROQ_API_KEY"]
 except Exception:
@@ -66,7 +65,7 @@ if btn:
         st.warning("Please paste a manuscript draft first.")
         st.stop()
 
-    with st.spinner("Processing manuscript, formatting, and sourcing 2020-2026 journals..."):
+    with st.spinner("Processing manuscript paragraph by paragraph to ensure zero claims are missed..."):
         
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -74,85 +73,92 @@ if btn:
             "Content-Type": "application/json"
         }
         
-                # Aggressive Few-Shot Prompt to force the AI to insert citations
-        prompt = f"""You are the lead academic editor for the ImoleWrites Research Hub.
-Your absolute requirement is to identify uncited scientific claims and insert citation placeholders.
-
-1. Read the manuscript. Polish the academic tone. DO NOT use em dashes.
+        # 1. Split the manuscript into distinct paragraphs
+        paragraphs = [p.strip() for p in draft_input.split('\n') if p.strip()]
+        final_processed_paragraphs = []
+        all_refs = []
+        
+        # 2. Force the AI to read and cite each paragraph individually
+        for para in paragraphs:
+            # Skip short headings or single sentences to save time
+            if len(para.split()) < 10:
+                final_processed_paragraphs.append(para)
+                continue
+                
+            prompt = f"""You are the lead academic editor for the ImoleWrites Research Hub.
+Process ONLY this specific paragraph.
+1. Polish the academic tone. Paraphrase slightly to ensure a natural human tone. DO NOT use em dashes.
 2. Preserve any existing citations (e.g., Author, Year).
-3. You MUST insert placeholders like [CITE_1], [CITE_2] immediately after factual scientific claims, analytical methods, or background statements that LACK citations.
+3. You MUST identify factual scientific claims that LACK citations and insert placeholders like [CITE_1], [CITE_2]. 
 4. Generate highly specific 5 to 7 keyword search queries for those placeholders.
-
-EXAMPLE BEHAVIOR:
-Original: "Electrochemical methods offer a much more pragmatic alternative. Both BPA and NP are electroactive compounds."
-Revised: "Electrochemical methods offer a much more pragmatic alternative [CITE_1]. Both BPA and NP are electroactive compounds, meaning they can be oxidized at the surface of a conductive electrode [CITE_2]."
 
 You MUST respond strictly in JSON format matching this exact structure:
 {{
-    "revised_text": "Your polished manuscript text containing the [CITE_X] placeholders...",
+    "revised_text": "Your polished paragraph containing the [CITE_X] placeholders...",
     "queries": {{
-        "[CITE_1]": "electrochemical detection methods BPA NP",
-        "[CITE_2]": "oxidation mechanisms of bisphenol A and nonylphenol"
+        "[CITE_1]": "specific scientific search keywords"
     }}
 }}
 
-Manuscript:
-{draft_input}"""
-        
-        payload = {
-            "model": "llama-3.3-70b-versatile",
-            "messages": [
-                {"role": "system", "content": "You output strict JSON only."},
-                {"role": "user", "content": prompt}
-            ],
-            "response_format": {"type": "json_object"},
-            "temperature": 0.1
-        }
-        
-        try:
-            ai_res = requests.post(groq_url, headers=headers, json=payload).json()
+Paragraph to process:
+{para}"""
             
-            if 'error' in ai_res:
-                st.error(f"API Error: {ai_res['error']['message']}")
-                st.stop()
+            payload = {
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {"role": "system", "content": "You output strict JSON only."},
+                    {"role": "user", "content": prompt}
+                ],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.2
+            }
+            
+            try:
+                ai_res = requests.post(groq_url, headers=headers, json=payload).json()
+                if 'error' in ai_res:
+                    st.error(f"API Error: {ai_res['error']['message']}")
+                    st.stop()
+                    
+                ai_data = json.loads(ai_res['choices'][0]['message']['content'])
+                revised_para = ai_data.get("revised_text", para)
+                queries = ai_data.get("queries", {})
                 
-            ai_data = json.loads(ai_res['choices'][0]['message']['content'])
-            final_text = ai_data.get("revised_text", draft_input)
-            queries = ai_data.get("queries", {})
+                if queries:
+                    for tag, query in queries.items():
+                        in_text, apa_ref = fetch_verified_journal(query)
+                        if in_text:
+                            revised_para = revised_para.replace(tag, in_text)
+                            all_refs.append(apa_ref)
+                        else:
+                            revised_para = revised_para.replace(f" {tag}", "")
+                            revised_para = revised_para.replace(tag, "")
+                            
+                final_processed_paragraphs.append(revised_para)
+            except Exception:
+                final_processed_paragraphs.append(para)
             
-            all_refs = []
-            
-            if queries:
-                for tag, query in queries.items():
-                    in_text, apa_ref = fetch_verified_journal(query)
-                    if in_text:
-                        final_text = final_text.replace(tag, in_text)
-                        all_refs.append(apa_ref)
-                    else:
-                        final_text = final_text.replace(f" {tag}", "")
-                        final_text = final_text.replace(tag, "")
-            
-            # Constructing the final display text with the APA Bibliography
-            display_text = final_text + "\n\nReferences\n"
-            if all_refs:
-                unique_refs = sorted(list(set(all_refs)))
-                for ref in unique_refs:
-                    display_text += f"{ref}\n\n"
+        # 3. Stitch the fully cited paragraphs back together
+        final_text_assembled = "\n\n".join(final_processed_paragraphs)
+        
+        # 4. Generate the complete APA Bibliography
+        display_text = final_text_assembled + "\n\nReferences\n"
+        if all_refs:
+            unique_refs = sorted(list(set(all_refs)))
+            for ref in unique_refs:
+                display_text += f"{ref}\n\n"
+        else:
+            display_text += "No additional references were sourced for this text."
 
-            # Custom UI Component with Bottom Copy Button
-            html_code = f"""
-            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; padding: 25px; border-radius: 8px; border: 1px solid #dee2e6; color: #212529; line-height: 1.8; font-size: 16px; white-space: pre-wrap; margin-bottom: 15px;" id="imole-output">
+        html_code = f"""
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; padding: 25px; border-radius: 8px; border: 1px solid #dee2e6; color: #212529; line-height: 1.8; font-size: 16px; white-space: pre-wrap; margin-bottom: 15px;" id="imole-output">
 {display_text}
-            </div>
-            <button onclick="navigator.clipboard.writeText(document.getElementById('imole-output').innerText); this.innerHTML='Copied to Clipboard!'; this.style.backgroundColor='#198754';" 
-            style="background-color: #0d6efd; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.3s; width: 100%; text-align: center; display: block;">
-                📋 Copy Complete Manuscript & Bibliography
-            </button>
-            """
-            
-            st.subheader("Final Output")
-            components.html(html_code, height=600, scrolling=True)
-
-        except Exception as e:
-            st.error(f"System Error: {str(e)}")
-                
+        </div>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('imole-output').innerText); this.innerHTML='Copied to Clipboard!'; this.style.backgroundColor='#198754';" 
+        style="background-color: #0d6efd; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.3s; width: 100%; text-align: center; display: block;">
+            📋 Copy Complete Manuscript & Bibliography
+        </button>
+        """
+        
+        st.subheader("Final Output")
+        components.html(html_code, height=600, scrolling=True)
+                            
