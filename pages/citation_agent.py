@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="ImoleWrites Hub", layout="wide", page_icon="🎓")
 st.title("🎓 ImoleWrites Research Hub")
-st.markdown("### Core Engine: Contextual Citation & APA Bibliography")
+st.markdown("### Core Engine: Smart Contextual Citation & APA Bibliography")
 
 try:
     api_key = st.secrets["GROQ_API_KEY"]
@@ -17,7 +17,6 @@ draft_input = st.text_area("Paste your un-cited or partially cited manuscript he
 btn = st.button("Auto-Cite & Generate Bibliography", type="primary")
 
 def fetch_verified_journal(query):
-    # Upgraded to Crossref API for fuzzy, Scholar-like keyword matching
     url = "https://api.crossref.org/works"
     
     params = {
@@ -32,7 +31,6 @@ def fetch_verified_journal(query):
         res = requests.get(url, params=params, timeout=10).json()
         items = res.get('message', {}).get('items', [])
         
-        # Fallback if the strict 2020 filter blocks a highly niche query
         if not items:
             params.pop("filter")
             res = requests.get(url, params=params, timeout=10).json()
@@ -89,7 +87,7 @@ if btn:
         st.warning("Please paste a manuscript draft first.")
         st.stop()
 
-    with st.spinner("Processing manuscript and dynamically sourcing from the global Crossref database..."):
+    with st.spinner("Analyzing text for original thoughts, stacking multiple citations where necessary..."):
         
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -106,18 +104,21 @@ if btn:
                 final_processed_paragraphs.append(para)
                 continue
                 
-            prompt = f"""You are the lead academic editor for the ImoleWrites Research Hub.
-Process ONLY this specific paragraph. Every paragraph submitted to you requires new literature backing.
+            # The Brain Upgrade: Elite Peer Reviewer Logic
+            prompt = f"""You are an elite academic peer reviewer for the ImoleWrites Research Hub.
+Process ONLY this specific paragraph.
 
-1. Polish the academic tone slightly to ensure a natural human tone. Avoid robotic phrasing. DO NOT use em dashes.
-2. You MUST identify factual scientific claims and insert AT LEAST ONE placeholder (like [CITE_1]) into the text. 
-3. Generate concise 2 to 3 keyword search queries for those placeholders.
+1. Polish the academic tone. DO NOT use em dashes.
+2. Think critically: Does this sentence actually need a citation? SKIP transitions, original conclusions, and basic common knowledge.
+3. For major factual claims, insert 1, 2, or up to 3 placeholders depending on the weight of the claim (e.g., placing [CITE_1][CITE_2] directly next to each other for a strong multi-citation).
+4. Generate concise 2 to 3 keyword search queries for every placeholder.
 
 You MUST respond strictly in JSON format matching this exact structure:
 {{
-    "revised_text": "Your polished paragraph containing the [CITE_X] placeholders...",
+    "revised_text": "Your polished paragraph with placeholders only where necessary...",
     "queries": {{
-        "[CITE_1]": "2 to 3 concise keywords"
+        "[CITE_1]": "2 to 3 keywords",
+        "[CITE_2]": "2 to 3 keywords"
     }}
 }}
 
@@ -159,13 +160,16 @@ Paragraph to process:
             
         final_text_assembled = "\n\n".join(final_processed_paragraphs)
         
+        # The APA Merger: Automatically merges (Author, 2021) (Smith, 2022) into (Author, 2021; Smith, 2022)
+        final_text_assembled = final_text_assembled.replace(") (", "; ")
+        
         display_text = final_text_assembled + "\n\nReferences\n"
         if all_refs:
             unique_refs = sorted(list(set(all_refs)))
             for ref in unique_refs:
                 display_text += f"{ref}\n\n"
         else:
-            display_text += "No valid references were found for the generated queries."
+            display_text += "No external references were deemed necessary for this text."
 
         html_code = f"""
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; padding: 25px; border-radius: 8px; border: 1px solid #dee2e6; color: #212529; line-height: 1.8; font-size: 16px; white-space: pre-wrap; margin-bottom: 15px;" id="imole-output">
@@ -179,4 +183,4 @@ Paragraph to process:
         
         st.subheader("Final Output")
         components.html(html_code, height=600, scrolling=True)
-                
+        
