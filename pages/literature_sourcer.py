@@ -42,8 +42,8 @@ if btn_search:
                 bib_data = ""
                 txt_data = ""
                 
+                # --- EXPORT BUTTONS ARE HERE IN THE MAIN UI ---
                 for idx, w in enumerate(items):
-                    # Extract fields safely
                     title = w.get('title', ['No Title'])[0]
                     authors = w.get('author', [])
                     author_names = [f"{a.get('family', '')}, {a.get('given', '')[0] if a.get('given') else ''}." for a in authors[:3]]
@@ -56,7 +56,6 @@ if btn_search:
                     page = w.get('page', '')
                     doi = w.get('DOI', '')
                     
-                    # Construct APA string with conditional volume/page
                     vol_issue = f", {vol}({issue})" if vol and issue else f", {vol}" if vol else ""
                     page_str = f", {page}" if page else ""
                     full_citation = f"{apa_authors} ({year}). {title}. *{journal}*{vol_issue}{page_str}. https://doi.org/{doi}"
@@ -64,17 +63,17 @@ if btn_search:
                     txt_data += f"{idx+1}. {full_citation}\n\n"
                     bib_data += f"@article{{ref{doi.replace('/', '_')},\n  author = {{{apa_authors}}},\n  title = {{{title}}},\n  journal = {{{journal}}},\n  year = {{{year}}},\n  volume = {{{vol}}},\n  number = {{{issue}}},\n  pages = {{{page}}},\n  doi = {{{doi}}}\n}}\n\n"
 
-                    with st.container():
-                        st.markdown(f"### {idx+1}. {title}")
-                        st.markdown(f"**Authors:** {apa_authors}")
-                        st.markdown(f"**Journal:** {journal} | **Vol:** {vol} | **Issue:** {issue} | **Page:** {page}")
-                        st.code(full_citation, language="markdown")
-                        st.markdown("---")
+                # Buttons visible right below the success message
+                colA, colB = st.columns(2)
+                colA.download_button("Download .bib (BibTeX)", bib_data, "references.bib", "text/x-bibtex")
+                colB.download_button("Download .txt (APA)", txt_data, "references.txt", "text/plain")
 
-                # Restore Download Buttons
-                st.sidebar.download_button("Download .bib", bib_data, "references.bib", "text/x-bibtex")
-                st.sidebar.download_button("Download .txt", txt_data, "references.txt", "text/plain")
+                for idx, w in enumerate(items):
+                    with st.container():
+                        st.markdown(f"### {idx+1}. {w.get('title', [''])[0]}")
+                        st.code(txt_data.split('\n\n')[idx], language="markdown")
+                        st.markdown("---")
                         
         except Exception as e:
             st.error(f"Connection error: {e}")
-                               
+                    
