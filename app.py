@@ -159,6 +159,27 @@ with col2:
 
 st.markdown("___")
 
-# Footer Context
-st.markdown("#### Need Assistance or Custom Services?")
-st.write("For technical support, custom manuscript reviews, paper publications or business inquiries, reach out directly to **imolewriteshub@gmail.com**.")
+# ================ FOOTER & DEVELOPER PROFILE (MAIN PAGE) ================
+st.markdown("___")
+
+# Two-column layout for the footer to keep it clean on desktop and stacked on mobile
+foot_col1, foot_col2 = st.columns([1.5, 1])
+
+with foot_col1:
+    st.markdown("#### Need Assistance or Custom Services?")
+    st.write(
+        "For technical support, custom manuscript reviews, paper publications, "
+        "or business inquiries, reach out directly."
+    )
+    st.markdown("**Email:** [imolewriteshub@gmail.com](mailto:imolewriteshub@gmail.com)")
+
+with foot_col2:
+    # Main Page Developer Card (Always visible on mobile)
+    st.markdown("""
+    <div style="text-align: center; padding: 20px; background-color: var(--secondary-background-color); border-radius: 12px; border: 1px solid rgba(128, 128, 128, 0.2);">
+        <img src="https://imoleayo64.github.io/my_portfolio/profile.jpg" width="80" style="border-radius: 50%; border: 2px solid #3B82F6; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 10px; object-fit: cover;">
+        <h3 style="margin-top: 0px; margin-bottom: 2px; font-size: 1.1rem; font-weight: 700; color: #3B82F6;">Ibrahim Ajala</h3>
+        <p style="font-size: 0.75rem; color: var(--text-color); opacity: 0.8; margin-bottom: 12px; line-height: 1.4;">AI Software Engineer & Product Designer</p>
+        <a href="https://imoleayo64.github.io/my_portfolio/" target="_blank" class="profile-btn" style="background-color: #3B82F6; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; display: inline-block; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.2);">Visit Portfolio</a>
+    </div>
+    """, unsafe_allow_html=True)
