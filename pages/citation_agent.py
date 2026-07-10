@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import json
+import re
 import streamlit.components.v1 as components
 
 st.set_page_config(page_title="ImoleWrites Hub", layout="wide", page_icon="🎓")
@@ -19,9 +20,10 @@ btn = st.button("Auto-Cite & Generate Bibliography", type="primary")
 def fetch_verified_journal(query):
     url = "https://api.crossref.org/works"
     
+    # Added type:journal-article to strictly filter out incomplete metadata and peer review logs
     params = {
         "query": query,
-        "filter": "from-pub-date:2020",
+        "filter": "from-pub-date:2020,type:journal-article",
         "select": "author,title,published,container-title,DOI",
         "rows": 1,
         "mailto": "imolewriteshub@gmail.com"
@@ -32,7 +34,8 @@ def fetch_verified_journal(query):
         items = res.get('message', {}).get('items', [])
         
         if not items:
-            params.pop("filter")
+            # Fallback keeps the strict journal article filter but drops the year requirement
+            params["filter"] = "type:journal-article"
             res = requests.get(url, params=params, timeout=10).json()
             items = res.get('message', {}).get('items', [])
 
@@ -104,14 +107,14 @@ if btn:
                 final_processed_paragraphs.append(para)
                 continue
                 
-            # The Brain Upgrade: Elite Peer Reviewer Logic
             prompt = f"""You are an elite academic peer reviewer for the ImoleWrites Research Hub.
 Process ONLY this specific paragraph.
 
-1. Polish the academic tone. DO NOT use em dashes.
+1. Polish the academic tone. Do not use em dashes anywhere.
 2. Think critically: Does this sentence actually need a citation? SKIP transitions, original conclusions, and basic common knowledge.
-3. For major factual claims, insert 1, 2, or up to 3 placeholders depending on the weight of the claim (e.g., placing [CITE_1][CITE_2] directly next to each other for a strong multi-citation).
-4. Generate concise 2 to 3 keyword search queries for every placeholder.
+3. For major factual claims, insert 1, 2, or up to 3 placeholders depending on the weight of the claim.
+4. If a single sentence contains a list of related items, place ONE citation bracket at the very end of the sentence instead of citing every individual item.
+5. Generate concise 2 to 3 keyword search queries for every placeholder.
 
 You MUST respond strictly in JSON format matching this exact structure:
 {{
@@ -160,8 +163,8 @@ Paragraph to process:
             
         final_text_assembled = "\n\n".join(final_processed_paragraphs)
         
-        # The APA Merger: Automatically merges (Author, 2021) (Smith, 2022) into (Author, 2021; Smith, 2022)
-        final_text_assembled = final_text_assembled.replace(") (", "; ")
+        # Advanced Regex Merger: Automatically detects and merges adjacent brackets with or without spaces
+        final_text_assembled = re.sub(r'\)\s*\(', '; ', final_text_assembled)
         
         display_text = final_text_assembled + "\n\nReferences\n"
         if all_refs:
@@ -183,4 +186,4 @@ Paragraph to process:
         
         st.subheader("Final Output")
         components.html(html_code, height=600, scrolling=True)
-        
+            
