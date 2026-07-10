@@ -6,7 +6,9 @@ st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
 st.title("🎓 ImoleWrites Smart Citing Agent")
 st.markdown("Powered by Llama 3 - Autonomous Contextual Reading")
 
-api_key = st.sidebar.text_input("Enter your Groq API Key:", type="password")
+# Strip invisible spaces from the pasted key
+raw_key = st.sidebar.text_input("Enter your Groq API Key:", type="password")
+api_key = raw_key.strip() if raw_key else ""
 
 def get_real_journal(query):
     # Strictly modern journals (post-2018) using your business email
@@ -38,7 +40,7 @@ btn = st.button("Auto-Cite Manuscript", type="primary")
 if btn and api_key and draft_input:
     with st.spinner("AI is analyzing your manuscript and sourcing modern journals..."):
         
-        # Groq API connection using Llama 3 (70B parameter model for high intelligence)
+        # Groq API connection using Llama 3
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -62,14 +64,15 @@ if btn and api_key and draft_input:
         try:
             ai_response = requests.post(groq_url, headers=headers, json=payload)
             if ai_response.status_code != 200:
-                st.error("API Error: Please check your Groq API key.")
+                # Force the app to show exactly what Groq is complaining about
+                st.error(f"Groq API Error ({ai_response.status_code}): {ai_response.text}")
                 st.stop()
                 
             ai_data = ai_response.json()
             ai_text = ai_data['choices'][0]['message']['content']
             search_queries = [q.strip() for q in ai_text.split('|') if q.strip()]
-        except Exception:
-            st.error("Network failed to connect to the AI brain.")
+        except Exception as e:
+            st.error(f"Network failed: {str(e)}")
             st.stop()
             
         processed_text = []
@@ -78,7 +81,6 @@ if btn and api_key and draft_input:
         sentences = re.split(r'(?<=[.!?])\s+', draft_input)
         
         for sentence in sentences:
-            # The AI determines if the sentence needs a citation
             if len(sentence.split()) > 8 and search_queries:
                 query = search_queries.pop(0)
                 in_text, full_ref = get_real_journal(query)
@@ -101,4 +103,4 @@ if btn and api_key and draft_input:
             st.markdown(f"- {ref}")
 elif btn and not api_key:
     st.warning("Please paste your Groq API key in the sidebar before clicking.")
-    
+                         
