@@ -5,25 +5,35 @@ st.set_page_config(page_title="ImoleWrites Literature Sourcer", layout="wide", p
 st.title("📚 ImoleWrites Literature Sourcer")
 st.markdown("### Discover Verified High-Impact Journals")
 
+# Search Parameters UI
 with st.container():
-    search_query = st.text_input("Enter your research topic:")
-    num_results = st.number_input("Number of results to fetch:", min_value=1, max_value=50, value=10)
+    st.markdown("#### Search Parameters")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        search_query = st.text_input("Enter your research topic or keywords:")
+    with col2:
+        num_results = st.number_input("Number of results to fetch:", min_value=1, max_value=50, value=10)
+    
     col3, col4 = st.columns(2)
     with col3:
-        year_range = st.slider("Year Range:", 2010, 2026, (2020, 2026))
+        year_range = st.slider("Publication Year Range:", 2010, 2026, (2020, 2026))
     with col4:
-        impact_level = st.selectbox("Sort By:", ["Relevance", "Citations"])
-    
-    btn_search = st.button("Search Literature", type="primary", use_container_width=True)
+        impact_level = st.selectbox("Sort By:", ["Relevance (Best Match)", "High Impact (Most Cited)"])
+
+btn_search = st.button("Search Literature", type="primary", use_container_width=True)
 
 if btn_search:
-    with st.spinner("Fetching data..."):
+    if not search_query.strip():
+        st.warning("Please enter a research topic to search.")
+        st.stop()
+
+    with st.spinner("Scouring global academic databases for verified literature..."):
         params = {
             "query": search_query,
             "filter": f"from-pub-date:{year_range[0]},until-pub-date:{year_range[1]},type:journal-article",
-            "select": "author,title,published,container-title,DOI,is-referenced-by-count,ISSN",
+            "select": "author,title,published,container-title,DOI,is-referenced-by-count,volume,issue,page",
             "rows": num_results,
-            "sort": "is-referenced-by-count" if impact_level == "Citations" else "relevance",
+            "sort": "is-referenced-by-count" if impact_level == "High Impact (Most Cited)" else "relevance",
             "order": "desc",
             "mailto": "imolewriteshub@gmail.com"
         }
@@ -32,48 +42,51 @@ if btn_search:
             res = requests.get("https://api.crossref.org/works", params=params, timeout=15).json()
             items = res.get('message', {}).get('items', [])
             
-            bib_data = ""
-            txt_data = ""
-            
-                        # ... (inside the loop in pages/literature_sourcer.py)
-            for w in items:
-                title = w.get('title', ['No Title'])[0]
+            if not items:
+                st.info("No verified journals found matching those parameters. Try broadening your keywords.")
+            else:
+                st.success(f"Successfully retrieved {len(items)} verified journals.")
                 
-                # Extract Authors properly
-                authors = w.get('author', [])
-                author_names = [f"{a.get('family', '')}, {a.get('given', '')[0] if a.get('given') else ''}." for a in authors[:3]]
-                apa_authors = ", ".join(author_names) + (", et al." if len(authors) > 3 else "")
+                bib_data = ""
+                txt_data = ""
                 
-                year = w.get('published', {}).get('date-parts', [[2020]])[0][0]
-                journal = w.get('container-title', [''])[0]
-                vol = w.get('volume', '')
-                issue = w.get('issue', '')
-                page = w.get('page', '')
-                doi = w.get('DOI', '')
-                
-                # Assemble Full APA String
-                full_citation = f"{apa_authors} ({year}). {title}. *{journal}*, {vol}({issue}), {page}. https://doi.org/{doi}"
-                
-                # BibTeX Format
-                bib_data += f"@article{{ref{doi.replace('/', '_')},\n  author = {{{apa_authors}}},\n  title = {{{title}}},\n  journal = {{{journal}}},\n  year = {{{year}}},\n  volume = {{{vol}}},\n  number = {{{issue}}},\n  pages = {{{page}}},\n  doi = {{{doi}}}\n}}\n\n"
-                
-                # APA Text Format
-                txt_data += f"{full_citation}\n\n"
+                for idx, w in enumerate(items):
+                    # Data Extraction
+                    title = w.get('title', ['No Title'])[0]
+                    authors = w.get('author', [])
+                    
+                    author_names = [f"{a.get('family', 'Unknown')}, {a.get('given', '')[0] if a.get('given') else ''}." for a in authors[:3]]
+                    apa_authors = ", ".join(author_names) + (", et al." if len(authors) > 3 else "")
+                    
+                    year = w.get('published', {}).get('date-parts', [[2020]])[0][0]
+                    journal = w.get('container-title', ['Journal Title Missing'])[0]
+                    vol = w.get('volume', '')
+                    issue = w.get('issue', '')
+                    page = w.get('page', '')
+                    doi = w.get('DOI', '')
+                    
+                    # Full APA String
+                    vol_issue = f", {vol}({issue})" if vol and issue else f", {vol}" if vol else ""
+                    page_str = f", {page}" if page else ""
+                    full_citation = f"{apa_authors} ({year}). {title}. *{journal}*{vol_issue}{page_str}. https://doi.org/{doi}"
+                    
+                    # Store for exports
+                    bib_data += f"@article{{ref{doi.replace('/', '_')},\n  author = {{{apa_authors}}},\n  title = {{{title}}},\n  journal = {{{journal}}},\n  year = {{{year}}},\n  volume = {{{vol}}},\n  number = {{{issue}}},\n  pages = {{{page}}},\n  doi = {{{doi}}}\n}}\n\n"
+                    txt_data += f"{idx+1}. {full_citation}\n\n"
+                    
+                    # Display cards
+                    with st.container():
+                        st.markdown(f"### {idx+1}. {title}")
+                        st.markdown(f"**Authors:** {apa_authors}")
+                        st.markdown(f"**Journal:** {journal} | **Vol:** {vol} | **Page:** {page}")
+                        st.markdown(f"**DOI:** [{doi}](https://doi.org/{doi})")
+                        st.code(full_citation, language="markdown")
+                        st.markdown("---")
 
-                
-                # BibTeX Format
-                bib_data += f"@article{{ref{doi.replace('/', '_')},\n  author = {{{author_str}}},\n  title = {{{title}}},\n  year = {{{year}}},\n  doi = {{{doi}}}\n}}\n\n"
-                txt_data += f"{author_str} ({year}). {title}. DOI: {doi}\n\n"
-
-            # Export Buttons
-            colA, colB = st.columns(2)
-            colA.download_button("Download .bib (BibTeX)", bib_data, "references.bib", "text/x-bibtex")
-            colB.download_button("Download .txt (APA)", txt_data, "references.txt", "text/plain")
-
-            for idx, w in enumerate(items):
-                st.markdown(f"### {idx+1}. {w.get('title', [''])[0]}")
-                st.code(txt_data.split('\n\n')[idx], language="markdown")
-                st.markdown("---")
+                # Export Buttons at the top
+                st.sidebar.download_button("Download Bibliography (.bib)", bib_data, "references.bib", "text/x-bibtex")
+                st.sidebar.download_button("Download Bibliography (.txt)", txt_data, "references.txt", "text/plain")
+                        
         except Exception as e:
-            st.error(f"Error: {e}")
-            
+            st.error(f"Connection error: {e}")
+                    
