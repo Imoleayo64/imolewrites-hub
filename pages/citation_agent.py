@@ -6,7 +6,7 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="ImoleWrites Hub", layout="wide", page_icon="🎓")
 st.title("🎓 ImoleWrites Research Hub")
-st.markdown("### Core Engine: Smart Contextual Citation & APA Bibliography")
+st.markdown("### Smart Contextual Citation & APA Bibliography")
 
 try:
     api_key = st.secrets["GROQ_API_KEY"]
