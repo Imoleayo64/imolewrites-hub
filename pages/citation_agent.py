@@ -74,20 +74,25 @@ if btn:
             "Content-Type": "application/json"
         }
         
-        # Aggressive prompt ensuring uncited claims get placeholders
+                # Aggressive Few-Shot Prompt to force the AI to insert citations
         prompt = f"""You are the lead academic editor for the ImoleWrites Research Hub.
-1. Read the manuscript. Polish the academic tone and grammar. DO NOT use em dashes.
+Your absolute requirement is to identify uncited scientific claims and insert citation placeholders.
+
+1. Read the manuscript. Polish the academic tone. DO NOT use em dashes.
 2. Preserve any existing citations (e.g., Author, Year).
-3. You MUST identify factual scientific claims that currently LACK citations. 
-4. Insert placeholders like [CITE_1], [CITE_2] for EVERY uncited claim that requires literature backing.
-5. Generate highly specific 5 to 7 keyword search queries for those placeholders.
+3. You MUST insert placeholders like [CITE_1], [CITE_2] immediately after factual scientific claims, analytical methods, or background statements that LACK citations.
+4. Generate highly specific 5 to 7 keyword search queries for those placeholders.
+
+EXAMPLE BEHAVIOR:
+Original: "Electrochemical methods offer a much more pragmatic alternative. Both BPA and NP are electroactive compounds."
+Revised: "Electrochemical methods offer a much more pragmatic alternative [CITE_1]. Both BPA and NP are electroactive compounds, meaning they can be oxidized at the surface of a conductive electrode [CITE_2]."
 
 You MUST respond strictly in JSON format matching this exact structure:
 {{
     "revised_text": "Your polished manuscript text containing the [CITE_X] placeholders...",
     "queries": {{
-        "[CITE_1]": "specific scientific search keywords",
-        "[CITE_2]": "specific scientific search keywords"
+        "[CITE_1]": "electrochemical detection methods BPA NP",
+        "[CITE_2]": "oxidation mechanisms of bisphenol A and nonylphenol"
     }}
 }}
 
