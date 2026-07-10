@@ -7,7 +7,6 @@ st.set_page_config(page_title="ImoleWrites Hub", layout="wide", page_icon="🎓"
 st.title("🎓 ImoleWrites Research Hub")
 st.markdown("### Core Engine: Contextual Citation & APA Bibliography")
 
-# Invisible Backend Key
 try:
     api_key = st.secrets["GROQ_API_KEY"]
 except Exception:
@@ -18,40 +17,39 @@ draft_input = st.text_area("Paste your un-cited or partially cited manuscript he
 btn = st.button("Auto-Cite & Generate Bibliography", type="primary")
 
 def fetch_verified_journal(query):
-    url = "https://api.openalex.org/works"
+    # Upgraded to Crossref API for fuzzy, Scholar-like keyword matching
+    url = "https://api.crossref.org/works"
     
-    # Using a params dictionary guarantees perfect URL encoding for spaces and symbols
     params = {
-        "default_search": query,
-        "filter": "publication_year:>2019",
-        "sort": "relevance_score:desc",
-        "per-page": 1,
+        "query": query,
+        "filter": "from-pub-date:2020",
+        "select": "author,title,published,container-title,DOI",
+        "rows": 1,
         "mailto": "imolewriteshub@gmail.com"
     }
     
     try:
         res = requests.get(url, params=params, timeout=10).json()
+        items = res.get('message', {}).get('items', [])
         
-        # Fallback search if the strict 2020+ filter blocks a rare, highly specific query
-        if not res.get('results'):
-            fallback_params = {
-                "default_search": query,
-                "per-page": 1,
-                "mailto": "imolewriteshub@gmail.com"
-            }
-            res = requests.get(url, params=fallback_params, timeout=10).json()
+        # Fallback if the strict 2020 filter blocks a highly niche query
+        if not items:
+            params.pop("filter")
+            res = requests.get(url, params=params, timeout=10).json()
+            items = res.get('message', {}).get('items', [])
 
-        if res.get('results') and len(res['results']) > 0:
-            w = res['results'][0]
+        if items:
+            w = items[0]
             
-            authors = w.get('authorships', [])
+            authors = w.get('author', [])
             author_names = []
             for a in authors[:3]:
-                name_parts = a.get('author', {}).get('display_name', 'Unknown').split()
-                if name_parts:
-                    last_name = name_parts[-1]
-                    initial = name_parts[0][0] + "." if len(name_parts) > 1 else ""
-                    author_names.append(f"{last_name}, {initial}")
+                last = a.get('family', 'Unknown')
+                first = a.get('given', '')
+                initial = first[0] + "." if first else ""
+                clean_name = f"{last}, {initial}".strip(", ")
+                if clean_name != "Unknown, ":
+                    author_names.append(clean_name)
             
             if len(authors) > 3:
                 author_str = f"{author_names[0].split(',')[0]} et al."
@@ -66,17 +64,20 @@ def fetch_verified_journal(query):
                 author_str = "Unknown Author"
                 apa_authors = "Unknown Author"
 
-            year = w.get('publication_year', 'n.d.')
-            title = w.get('title', 'No Title Available')
+            pub = w.get('published', {}).get('date-parts', [[None]])
+            year = pub[0][0] if pub and pub[0][0] else 'n.d.'
             
-            loc = w.get('primary_location') or {}
-            source = loc.get('source') or {}
-            journal = source.get('display_name') or 'Journal Title Missing'
+            title_list = w.get('title', ['No Title Available'])
+            title = title_list[0] if title_list else 'No Title Available'
             
-            doi = w.get('doi', '')
+            journal_list = w.get('container-title', ['Journal Title Missing'])
+            journal = journal_list[0] if journal_list else 'Journal Title Missing'
+            
+            doi = w.get('DOI', '')
+            doi_url = f"https://doi.org/{doi}" if doi else ""
             
             in_text = f"({author_str}, {year})"
-            apa_ref = f"{apa_authors} ({year}). {title}. *{journal}*. {doi}"
+            apa_ref = f"{apa_authors} ({year}). {title}. *{journal}*. {doi_url}"
             
             return in_text, apa_ref
     except Exception:
@@ -88,7 +89,7 @@ if btn:
         st.warning("Please paste a manuscript draft first.")
         st.stop()
 
-    with st.spinner("Processing manuscript and fetching verified 2020-2026 journals..."):
+    with st.spinner("Processing manuscript and dynamically sourcing from the global Crossref database..."):
         
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -108,9 +109,9 @@ if btn:
             prompt = f"""You are the lead academic editor for the ImoleWrites Research Hub.
 Process ONLY this specific paragraph. Every paragraph submitted to you requires new literature backing.
 
-1. Polish the academic tone slightly to ensure a natural human tone. DO NOT use em dashes.
+1. Polish the academic tone slightly to ensure a natural human tone. Avoid robotic phrasing. DO NOT use em dashes.
 2. You MUST identify factual scientific claims and insert AT LEAST ONE placeholder (like [CITE_1]) into the text. 
-3. Generate highly concise 2 to 3 keyword search queries for those placeholders (e.g., "mass spectrometry", "bioinformatics").
+3. Generate concise 2 to 3 keyword search queries for those placeholders.
 
 You MUST respond strictly in JSON format matching this exact structure:
 {{
@@ -178,4 +179,4 @@ Paragraph to process:
         
         st.subheader("Final Output")
         components.html(html_code, height=600, scrolling=True)
-                    
+                
