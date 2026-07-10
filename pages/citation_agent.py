@@ -1,55 +1,72 @@
 import streamlit as st
 import requests
 import json
+import re
+import streamlit.components.v1 as components
 
-st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
-st.title("🎓 ImoleWrites Smart Citing Agent")
-st.markdown("Powered by Llama 3.3 - True Academic AI")
+st.set_page_config(page_title="ImoleWrites Hub", layout="wide", page_icon="🎓")
+st.title("🎓 ImoleWrites Research Hub")
+st.markdown("### Core Engine: Contextual Citation & APA Bibliography")
 
-# The Hybrid Key Grabber
+# Invisible Backend Key (Users will never see this)
 try:
     api_key = st.secrets["GROQ_API_KEY"]
 except Exception:
-    raw_key = st.sidebar.text_input("Secret not found. Enter Groq API Key here:", type="password", key="groq_fallback")
-    api_key = raw_key.strip() if raw_key else ""
+    st.error("System Error: Developer API Key missing in server environment.")
+    st.stop()
 
-draft_input = st.text_area("Paste your manuscript draft here:", height=300)
-btn = st.button("Auto-Cite & Polish Manuscript", type="primary")
+draft_input = st.text_area("Paste your un-cited or partially cited manuscript here:", height=300)
+btn = st.button("Auto-Cite & Generate Bibliography", type="primary")
 
-def get_real_journal(query):
-    # Strictly modern journals (post-2018) using the business email
-    url = f"https://api.openalex.org/works?search={query}&filter=publication_year:>2018&per-page=1&mailto=imolewriteshub@gmail.com"
+def fetch_verified_journal(query):
+    # 2020-2026 Open Access Verified Journals
+    url = f"https://api.openalex.org/works?search={query}&filter=publication_year:>2019,is_oa:true&sort=relevance_score:desc&per-page=1&mailto=imolewriteshub@gmail.com"
     try:
         res = requests.get(url, timeout=10).json()
         if res.get('results'):
             w = res['results'][0]
             
             authors = w.get('authorships', [])
-            name = authors[0].get('author', {}).get('display_name', 'Unknown').split()[-1] if authors else "Unknown Author"
+            author_names = []
+            for a in authors[:3]:
+                name_parts = a.get('author', {}).get('display_name', '').split()
+                if name_parts:
+                    last_name = name_parts[-1]
+                    initial = name_parts[0][0] + "." if len(name_parts) > 1 else ""
+                    author_names.append(f"{last_name}, {initial}")
+            
+            if len(authors) > 3:
+                author_str = f"{author_names[0]} et al."
+                apa_authors = ", ".join(author_names) + ", et al."
+            elif len(author_names) > 1:
+                author_str = f"{author_names[0]} & {author_names[1].split(',')[0]}" if len(author_names) == 2 else f"{author_names[0]} et al."
+                apa_authors = ", & ".join([", ".join(author_names[:-1]), author_names[-1]])
+            elif author_names:
+                author_str = author_names[0].split(',')[0]
+                apa_authors = author_names[0]
+            else:
+                author_str = "Unknown Author"
+                apa_authors = "Unknown Author"
+
             year = w.get('publication_year', 'n.d.')
             title = w.get('title', 'No Title Available')
             journal = w.get('primary_location', {}).get('source', {}).get('display_name', 'Journal Title Missing')
             doi = w.get('doi', '')
-            vol = w.get('biblio', {}).get('volume', '')
-            vol_str = f", {vol}" if vol else ""
             
-            in_text = f"({name} et al., {year})"
-            full_ref = f"{name} et al. ({year}). {title}. *{journal}*{vol_str}. {doi}"
-            return in_text, full_ref
+            in_text = f"({author_str}, {year})"
+            apa_ref = f"{apa_authors} ({year}). {title}. *{journal}*. {doi}"
+            
+            return in_text, apa_ref
     except Exception:
         pass
     return None, None
 
 if btn:
-    if not api_key:
-        st.error("Please provide your Groq API Key to proceed.")
-        st.stop()
-        
     if not draft_input:
         st.warning("Please paste a manuscript draft first.")
         st.stop()
 
-    with st.spinner("AI is thinking and reviewing the manuscript like a peer reviewer..."):
+    with st.spinner("Processing manuscript, formatting, and sourcing 2020-2026 journals..."):
         
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -57,19 +74,20 @@ if btn:
             "Content-Type": "application/json"
         }
         
-        # The prompt now asks the AI to act like a real researcher and think critically
-        prompt = f"""You are an expert academic writer and analytical chemist acting as a rigorous peer reviewer. Review the manuscript below.
-1. Polish the academic tone, flow, and grammar. DO NOT use em dashes anywhere in your response.
-2. Preserve ALL existing citations exactly as they are.
-3. Think critically: Evaluate if the factual claims are already supported. ONLY insert a placeholder (like [CITE_1]) if a significant scientific claim is completely unsupported and genuinely requires literature backing.
-4. If the paragraph is already well cited or only contains general transitions and original thoughts, DO NOT add any placeholders.
-5. Generate highly specific 4 to 6 keyword chemistry search queries for any placeholders you do add.
+        # Aggressive prompt ensuring uncited claims get placeholders
+        prompt = f"""You are the lead academic editor for the ImoleWrites Research Hub.
+1. Read the manuscript. Polish the academic tone and grammar. DO NOT use em dashes.
+2. Preserve any existing citations (e.g., Author, Year).
+3. You MUST identify factual scientific claims that currently LACK citations. 
+4. Insert placeholders like [CITE_1], [CITE_2] for EVERY uncited claim that requires literature backing.
+5. Generate highly specific 5 to 7 keyword search queries for those placeholders.
 
 You MUST respond strictly in JSON format matching this exact structure:
 {{
-    "revised_text": "Your polished manuscript text containing any necessary placeholders...",
+    "revised_text": "Your polished manuscript text containing the [CITE_X] placeholders...",
     "queries": {{
-        "[CITE_1]": "specific chemistry search keywords"
+        "[CITE_1]": "specific scientific search keywords",
+        "[CITE_2]": "specific scientific search keywords"
     }}
 }}
 
@@ -79,7 +97,7 @@ Manuscript:
         payload = {
             "model": "llama-3.3-70b-versatile",
             "messages": [
-                {"role": "system", "content": "You are a JSON-only output machine."},
+                {"role": "system", "content": "You output strict JSON only."},
                 {"role": "user", "content": prompt}
             ],
             "response_format": {"type": "json_object"},
@@ -101,30 +119,35 @@ Manuscript:
             
             if queries:
                 for tag, query in queries.items():
-                    in_text, full_ref = get_real_journal(query)
+                    in_text, apa_ref = fetch_verified_journal(query)
                     if in_text:
                         final_text = final_text.replace(tag, in_text)
-                        all_refs.append(full_ref)
+                        all_refs.append(apa_ref)
                     else:
                         final_text = final_text.replace(f" {tag}", "")
                         final_text = final_text.replace(tag, "")
             
-            st.subheader("Polished & Cited Manuscript:")
-            
-            # Text will now wrap naturally and read beautifully
-            st.markdown(final_text)
-            
-            # A clean box dedicated to easy copying without horizontal scrolling
-            st.text_area("Select all and copy from here:", value=final_text, height=250)
-            
+            # Constructing the final display text with the APA Bibliography
+            display_text = final_text + "\n\nReferences\n"
             if all_refs:
-                st.subheader("Reference List:")
-                unique_refs = list(set(all_refs))
+                unique_refs = sorted(list(set(all_refs)))
                 for ref in unique_refs:
-                    st.markdown(f"* {ref}")
-            else:
-                st.success("The AI reviewed the text and determined the existing citations were sufficient.")
-                
-        except Exception as e:
-            st.error(f"Processing error: {str(e)}")
+                    display_text += f"{ref}\n\n"
+
+            # Custom UI Component with Bottom Copy Button
+            html_code = f"""
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; padding: 25px; border-radius: 8px; border: 1px solid #dee2e6; color: #212529; line-height: 1.8; font-size: 16px; white-space: pre-wrap; margin-bottom: 15px;" id="imole-output">
+{display_text}
+            </div>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('imole-output').innerText); this.innerHTML='Copied to Clipboard!'; this.style.backgroundColor='#198754';" 
+            style="background-color: #0d6efd; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.3s; width: 100%; text-align: center; display: block;">
+                📋 Copy Complete Manuscript & Bibliography
+            </button>
+            """
             
+            st.subheader("Final Output")
+            components.html(html_code, height=600, scrolling=True)
+
+        except Exception as e:
+            st.error(f"System Error: {str(e)}")
+                
