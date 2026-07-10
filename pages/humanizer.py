@@ -3,7 +3,7 @@ import requests
 
 st.set_page_config(page_title="ImoleWrites Humanizer", layout="wide", page_icon="🧠")
 st.title("🧠 AI Bypass & Text Humanizer")
-st.markdown("### Rewrite robotic text with natural human flow and burstiness.")
+st.markdown("### Rewrite with natural human flow and burstiness.")
 
 try:
     api_key = st.secrets["GROQ_API_KEY"]
