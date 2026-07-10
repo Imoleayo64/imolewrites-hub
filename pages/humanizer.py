@@ -33,11 +33,11 @@ if btn_humanize:
         
         # Dynamic Prompting based on user selection
         if content_type == "Academic & Analytical":
-            system_rules = """You are a senior academic writer and editor.
-Rewrite the provided text to bypass AI detectors (Turnitin, GPTZero) while maintaining absolute academic rigor.
-1. Increase burstiness by alternating between complex, multi-clause sentences and short, direct statements.
-2. Ensure proper paraphrasing to avoid plagiarism detection.
-3. Preserve all scientific terminology, chemical names, and data points exactly as provided.
+            system_rules = """You are a senior academic peer-reviewer and editor.
+Rewrite the provided text to bypass AI detectors (Turnitin, GPTZero) while maintaining doctoral-level academic rigor and sophistication.
+1. Increase burstiness by alternating between highly analytical compound sentences and sharp, definitive statements.
+2. STRICTLY PRESERVE all parenthetical citations (e.g., (Author, Year)) exactly as they appear in the original text. Do not convert them into conversational narrative.
+3. Preserve all scientific terminology, chemical names, and structural descriptions exactly as provided.
 4. DO NOT use common AI clichés (e.g., delve, intricate tapestry, robust, pivotal, multifaceted).
 5. DO NOT use em dashes.
 6. Output ONLY the rewritten text."""
@@ -66,7 +66,7 @@ Rewrite the provided text for social media platforms (LinkedIn, Twitter, Faceboo
                 {"role": "system", "content": system_rules},
                 {"role": "user", "content": f"Text to humanize:\n{draft_input}"}
             ],
-            "temperature": 0.6 # Slightly higher temperature for more creative rewrites
+            "temperature": 0.6 
         }
         
         try:
@@ -89,4 +89,4 @@ Rewrite the provided text for social media platforms (LinkedIn, Twitter, Faceboo
                 
         except Exception as e:
             st.error("System Notification: Unable to connect to the server. Please check your internet connection.")
-
+            
