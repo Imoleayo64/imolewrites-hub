@@ -6,31 +6,26 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="ImoleWrites Hub", layout="wide", page_icon="🎓")
 st.title("🎓 ImoleWrites Research Hub")
-st.markdown("### Core Engine: Contextual Citation & APA Formatting")
+st.markdown("### Core Engine: Contextual Citation & APA Bibliography")
 
-# 1. Secure Credential Management
+# Invisible Backend Key (Users will never see this)
 try:
     api_key = st.secrets["GROQ_API_KEY"]
 except Exception:
-    raw_key = st.sidebar.text_input("Enter your Groq API Key to initialize the engine:", type="password")
-    api_key = raw_key.strip() if raw_key else ""
+    st.error("System Error: Developer API Key missing in server environment.")
+    st.stop()
 
-# 2. Advanced UI Input
 draft_input = st.text_area("Paste your un-cited or partially cited manuscript here:", height=300)
-col1, col2 = st.columns([1, 4])
-with col1:
-    btn = st.button("Initialize Academic Engine", type="primary", use_container_width=True)
+btn = st.button("Auto-Cite & Generate Bibliography", type="primary")
 
-# 3. The Sourcing Logic (Feature 4: 2020-2026 Verified Journals)
 def fetch_verified_journal(query):
-    # Filters for Open Access, recent years (2020-2026), sorted by relevance
+    # 2020-2026 Open Access Verified Journals
     url = f"https://api.openalex.org/works?search={query}&filter=publication_year:>2019,is_oa:true&sort=relevance_score:desc&per-page=1&mailto=imolewriteshub@gmail.com"
     try:
         res = requests.get(url, timeout=10).json()
         if res.get('results'):
             w = res['results'][0]
             
-            # Extracting strict APA data
             authors = w.get('authorships', [])
             author_names = []
             for a in authors[:3]:
@@ -58,7 +53,6 @@ def fetch_verified_journal(query):
             journal = w.get('primary_location', {}).get('source', {}).get('display_name', 'Journal Title Missing')
             doi = w.get('doi', '')
             
-            # Formats
             in_text = f"({author_str}, {year})"
             apa_ref = f"{apa_authors} ({year}). {title}. *{journal}*. {doi}"
             
@@ -67,16 +61,12 @@ def fetch_verified_journal(query):
         pass
     return None, None
 
-# 4. The Brain (Features 1 & 3: Contextual Reading and Logic)
 if btn:
-    if not api_key:
-        st.error("Engine requires an active API key to proceed.")
-        st.stop()
     if not draft_input:
-        st.warning("Please provide a manuscript for processing.")
+        st.warning("Please paste a manuscript draft first.")
         st.stop()
 
-    with st.spinner("ImoleWrites Engine is analyzing claims, verifying context, and sourcing literature..."):
+    with st.spinner("Processing manuscript, formatting, and sourcing 2020-2026 journals..."):
         
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -84,23 +74,24 @@ if btn:
             "Content-Type": "application/json"
         }
         
-        prompt = f"""You are the lead academic editor for the ImoleWrites Research Hub. Your task is to process this manuscript thoroughly.
-1. Read the entire text to understand the deep context.
-2. Polish the grammar and academic flow. Absolutely DO NOT use em dashes.
-3. Identify existing citations. If they fit the context, leave them. 
-4. Find factual scientific claims that lack citations. Insert a placeholder like [CITE_1], [CITE_2] where new literature is required.
-5. Generate highly specific 5 to 7 keyword search queries for those placeholders, focusing on modern research (2020-2026).
+        # Aggressive prompt ensuring uncited claims get placeholders
+        prompt = f"""You are the lead academic editor for the ImoleWrites Research Hub.
+1. Read the manuscript. Polish the academic tone and grammar. DO NOT use em dashes.
+2. Preserve any existing citations (e.g., Author, Year).
+3. You MUST identify factual scientific claims that currently LACK citations. 
+4. Insert placeholders like [CITE_1], [CITE_2] for EVERY uncited claim that requires literature backing.
+5. Generate highly specific 5 to 7 keyword search queries for those placeholders.
 
 You MUST respond strictly in JSON format matching this exact structure:
 {{
-    "revised_text": "Your fully polished manuscript text containing the [CITE_X] placeholders...",
+    "revised_text": "Your polished manuscript text containing the [CITE_X] placeholders...",
     "queries": {{
         "[CITE_1]": "specific scientific search keywords",
         "[CITE_2]": "specific scientific search keywords"
     }}
 }}
 
-Manuscript to process:
+Manuscript:
 {draft_input}"""
         
         payload = {
@@ -126,7 +117,6 @@ Manuscript to process:
             
             all_refs = []
             
-            # Seamless substitution and Bibliography generation
             if queries:
                 for tag, query in queries.items():
                     in_text, apa_ref = fetch_verified_journal(query)
@@ -137,18 +127,14 @@ Manuscript to process:
                         final_text = final_text.replace(f" {tag}", "")
                         final_text = final_text.replace(tag, "")
             
-            st.subheader("Final Output")
-            
             # Constructing the final display text with the APA Bibliography
             display_text = final_text + "\n\nReferences\n"
             if all_refs:
                 unique_refs = sorted(list(set(all_refs)))
                 for ref in unique_refs:
                     display_text += f"{ref}\n\n"
-            else:
-                display_text += "No additional references were sourced for this text."
 
-            # 5. The Custom UI Component (Feature 2: Perfect Formatting & Bottom Copy Button)
+            # Custom UI Component with Bottom Copy Button
             html_code = f"""
             <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; padding: 25px; border-radius: 8px; border: 1px solid #dee2e6; color: #212529; line-height: 1.8; font-size: 16px; white-space: pre-wrap; margin-bottom: 15px;" id="imole-output">
 {display_text}
@@ -159,8 +145,9 @@ Manuscript to process:
             </button>
             """
             
+            st.subheader("Final Output")
             components.html(html_code, height=600, scrolling=True)
 
         except Exception as e:
             st.error(f"System Error: {str(e)}")
-          
+            
