@@ -1,9 +1,9 @@
 import streamlit as st
 import requests
-  
+
 st.set_page_config(page_title="ImoleWrites Style Converter", layout="wide", page_icon="✍️")
 st.title("✍️ ImoleWrites Style Converter")
-st.markdown("### Bibliography Re-formatting Engine")
+st.markdown("### Structural Re-formatting Engine")
 
 try:
     api_key = st.secrets["GROQ_API_KEY"]
@@ -12,7 +12,7 @@ except Exception:
     st.stop()
 
 ref_input = st.text_area("Paste your references here (any style):", height=250)
-target_style = st.selectbox("Select Target Style:", ["Vancouver", "APA", "Turabian", "AMA"])
+target_style = st.selectbox("Select Target Style:", ["Vancouver", "APA", "Turabian"])
 btn_convert = st.button("Convert Bibliography", type="primary")
 
 if btn_convert:
@@ -29,7 +29,7 @@ Your goal is to reformat the provided bibliography list into strict {target_styl
 1. Parse each reference to identify the Authors, Year, Title, Journal, Volume, Issue, Pages, and DOI.
 2. Reconstruct each reference using ONLY {target_style} standards. 
 3. If converting to Vancouver, ensure the list is numbered (1., 2., 3., etc.).
-4. DO NOT use em dashes.
+4. Do not use em dashes anywhere in your response.
 5. Output ONLY the properly formatted bibliography list.
 
 Bibliography to convert:
@@ -45,17 +45,21 @@ Bibliography to convert:
             response = requests.post(groq_url, headers={"Authorization": f"Bearer {api_key}"}, json=payload)
             data = response.json()
             
-            # The Critical Check: Ensure 'choices' exists
             if 'choices' in data:
                 converted_text = data['choices'][0]['message']['content']
                 st.subheader(f"Formatted {target_style} Bibliography")
                 st.text_area("Result:", value=converted_text, height=300)
                 st.download_button("Download Formatted Bibliography", converted_text, f"bibliography_{target_style}.txt")
             elif 'error' in data:
-                st.error(f"API Provider Error: {data['error']['message']}")
+                error_msg = data['error'].get('message', '').lower()
+                # The UX Intercept: Catching rate limits and masking them
+                if 'rate limit' in error_msg or 'tokens' in error_msg:
+                    st.error("ImoleWrites is currently experiencing unusually high traffic. Please try your conversion again in a few moments.")
+                else:
+                    st.error("System Notification: We encountered a temporary issue processing your request. Please try again.")
             else:
-                st.error(f"Unexpected response format: {data}")
+                st.error("System Notification: Unexpected response from the formatting engine.")
                 
         except Exception as e:
-            st.error(f"Formatting engine error: {str(e)}")
-            
+            st.error("System Notification: Unable to connect to the formatting server. Please check your internet connection and try again.")
+          
