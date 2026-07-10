@@ -3,7 +3,7 @@ import requests
   
 st.set_page_config(page_title="ImoleWrites Style Converter", layout="wide", page_icon="✍️")
 st.title("✍️ ImoleWrites Style Converter")
-st.markdown("### Structural Re-formatting Engine")
+st.markdown("### Bibliography Re-formatting Engine")
 
 try:
     api_key = st.secrets["GROQ_API_KEY"]
@@ -12,7 +12,7 @@ except Exception:
     st.stop()
 
 ref_input = st.text_area("Paste your references here (any style):", height=250)
-target_style = st.selectbox("Select Target Style:", ["Vancouver", "APA", "Turabian"])
+target_style = st.selectbox("Select Target Style:", ["Vancouver", "APA", "Turabian", "AMA"])
 btn_convert = st.button("Convert Bibliography", type="primary")
 
 if btn_convert:
