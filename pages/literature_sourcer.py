@@ -35,12 +35,31 @@ if btn_search:
             bib_data = ""
             txt_data = ""
             
+                        # ... (inside the loop in pages/literature_sourcer.py)
             for w in items:
                 title = w.get('title', ['No Title'])[0]
-                authors = [f"{a.get('family', 'Unknown')}" for a in w.get('author', [])[:2]]
-                author_str = ", ".join(authors) + " et al." if len(w.get('author', [])) > 2 else ", ".join(authors)
+                
+                # Extract Authors properly
+                authors = w.get('author', [])
+                author_names = [f"{a.get('family', '')}, {a.get('given', '')[0] if a.get('given') else ''}." for a in authors[:3]]
+                apa_authors = ", ".join(author_names) + (", et al." if len(authors) > 3 else "")
+                
                 year = w.get('published', {}).get('date-parts', [[2020]])[0][0]
+                journal = w.get('container-title', [''])[0]
+                vol = w.get('volume', '')
+                issue = w.get('issue', '')
+                page = w.get('page', '')
                 doi = w.get('DOI', '')
+                
+                # Assemble Full APA String
+                full_citation = f"{apa_authors} ({year}). {title}. *{journal}*, {vol}({issue}), {page}. https://doi.org/{doi}"
+                
+                # BibTeX Format
+                bib_data += f"@article{{ref{doi.replace('/', '_')},\n  author = {{{apa_authors}}},\n  title = {{{title}}},\n  journal = {{{journal}}},\n  year = {{{year}}},\n  volume = {{{vol}}},\n  number = {{{issue}}},\n  pages = {{{page}}},\n  doi = {{{doi}}}\n}}\n\n"
+                
+                # APA Text Format
+                txt_data += f"{full_citation}\n\n"
+
                 
                 # BibTeX Format
                 bib_data += f"@article{{ref{doi.replace('/', '_')},\n  author = {{{author_str}}},\n  title = {{{title}}},\n  year = {{{year}}},\n  doi = {{{doi}}}\n}}\n\n"
