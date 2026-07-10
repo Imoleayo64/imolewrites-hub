@@ -1,10 +1,9 @@
 import streamlit as st
 import requests
-import json
 
 st.set_page_config(page_title="ImoleWrites Style Converter", layout="wide", page_icon="✍️")
 st.title("✍️ ImoleWrites Style Converter")
-st.markdown("### Instantly Switch Between APA, Vancouver, and Turabian")
+st.markdown("### Structural Re-formatting Engine")
 
 try:
     api_key = st.secrets["GROQ_API_KEY"]
@@ -12,9 +11,8 @@ except Exception:
     st.error("System Error: Developer API Key missing.")
     st.stop()
 
-# Input area
-ref_input = st.text_area("Paste your references here (e.g., in APA format):", height=250)
-target_style = st.selectbox("Select Target Style:", ["Turabian", "Vancouver", "APA"])
+ref_input = st.text_area("Paste your references here (any style):", height=250)
+target_style = st.selectbox("Select Target Style:", ["Vancouver", "APA", "Turabian"])
 btn_convert = st.button("Convert Bibliography", type="primary")
 
 if btn_convert:
@@ -22,18 +20,21 @@ if btn_convert:
         st.warning("Please paste your references.")
         st.stop()
 
-    with st.spinner(f"Converting to {target_style} format..."):
+    with st.spinner(f"Restructuring and converting to {target_style}..."):
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
-        prompt = f"""You are a professional academic librarian.
-Convert the following list of references into perfect {target_style} style.
+        
+        # The prompt now forces structural extraction first
+        prompt = f"""You are a senior academic bibliographer. 
+Your goal is to reformat the provided bibliography list into strict {target_style} style.
 
-Rules:
-1. Preserve all metadata (Authors, Year, Title, Journal, DOI).
-2. Follow {target_style} official guidelines strictly.
-3. DO NOT use em dashes.
-4. Output ONLY the converted bibliography list.
+1. First, parse each reference to identify the Authors, Year, Title, Journal/Source, Volume, Issue, Pages, and DOI.
+2. Discard all old formatting.
+3. Reconstruct each reference using ONLY {target_style} standards. 
+4. If converting to Vancouver, ensure the list is numbered (1., 2., 3., etc.).
+5. DO NOT use em dashes.
+6. Return the finished, properly formatted list.
 
-References:
+Bibliography to convert:
 {ref_input}"""
 
         payload = {
@@ -42,10 +43,13 @@ References:
             "temperature": 0.1
         }
         
-        response = requests.post(groq_url, headers={"Authorization": f"Bearer {api_key}"}, json=payload).json()
-        converted_text = response['choices'][0]['message']['content']
-        
-        st.subheader(f"Converted Bibliography ({target_style})")
-        st.code(converted_text, language="text")
-        st.download_button("Download Converted Bibliography", converted_text, f"bibliography_{target_style}.txt")
-
+        try:
+            response = requests.post(groq_url, headers={"Authorization": f"Bearer {api_key}"}, json=payload).json()
+            converted_text = response['choices'][0]['message']['content']
+            
+            st.subheader(f"Formatted {target_style} Bibliography")
+            st.text_area("Result:", value=converted_text, height=300)
+            st.download_button("Download Formatted Bibliography", converted_text, f"bibliography_{target_style}.txt")
+        except Exception as e:
+            st.error(f"Formatting engine error: {e}")
+            
