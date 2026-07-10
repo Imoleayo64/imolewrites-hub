@@ -19,28 +19,36 @@ draft_input = st.text_area("Paste your un-cited or partially cited manuscript he
 btn = st.button("Auto-Cite & Generate Bibliography", type="primary")
 
 def fetch_verified_journal(query):
-    # Ensure the query is URL-safe and filter for 2020-2026 Open Access
     safe_query = urllib.parse.quote(query)
-    url = f"https://api.openalex.org/works?default_search={safe_query}&filter=publication_year:>2019,has_doi:true&sort=relevance_score:desc&per-page=1&mailto=imolewriteshub@gmail.com"
+    # Broadest possible search for recent papers, sorted by relevance
+    url = f"https://api.openalex.org/works?search={safe_query}&filter=publication_year:>2019&sort=relevance_score:desc&per-page=1&mailto=imolewriteshub@gmail.com"
+    
     try:
         res = requests.get(url, timeout=10).json()
+        
+        # Fallback search if the first one somehow returns absolutely nothing
+        if not res.get('results'):
+            fallback_url = f"https://api.openalex.org/works?search={safe_query}&per-page=1&mailto=imolewriteshub@gmail.com"
+            res = requests.get(fallback_url, timeout=10).json()
+
         if res.get('results') and len(res['results']) > 0:
             w = res['results'][0]
             
+            # Safely extract authors
             authors = w.get('authorships', [])
             author_names = []
             for a in authors[:3]:
-                name_parts = a.get('author', {}).get('display_name', '').split()
+                name_parts = a.get('author', {}).get('display_name', 'Unknown').split()
                 if name_parts:
                     last_name = name_parts[-1]
                     initial = name_parts[0][0] + "." if len(name_parts) > 1 else ""
                     author_names.append(f"{last_name}, {initial}")
             
             if len(authors) > 3:
-                author_str = f"{author_names[0]} et al."
+                author_str = f"{author_names[0].split(',')[0]} et al."
                 apa_authors = ", ".join(author_names) + ", et al."
             elif len(author_names) > 1:
-                author_str = f"{author_names[0]} & {author_names[1].split(',')[0]}" if len(author_names) == 2 else f"{author_names[0]} et al."
+                author_str = f"{author_names[0].split(',')[0]} & {author_names[1].split(',')[0]}" if len(author_names) == 2 else f"{author_names[0].split(',')[0]} et al."
                 apa_authors = ", & ".join([", ".join(author_names[:-1]), author_names[-1]])
             elif author_names:
                 author_str = author_names[0].split(',')[0]
@@ -51,14 +59,19 @@ def fetch_verified_journal(query):
 
             year = w.get('publication_year', 'n.d.')
             title = w.get('title', 'No Title Available')
-            journal = w.get('primary_location', {}).get('source', {}).get('display_name', 'Journal Title Missing')
+            
+            # THE BUG FIX: Safely handling missing journal names so the code never crashes
+            loc = w.get('primary_location') or {}
+            source = loc.get('source') or {}
+            journal = source.get('display_name') or 'Journal Title Missing'
+            
             doi = w.get('doi', '')
             
             in_text = f"({author_str}, {year})"
             apa_ref = f"{apa_authors} ({year}). {title}. *{journal}*. {doi}"
             
             return in_text, apa_ref
-    except Exception:
+    except Exception as e:
         pass
     return None, None
 
@@ -84,13 +97,12 @@ if btn:
                 final_processed_paragraphs.append(para)
                 continue
                 
-            # The prompt now forces short queries and mandatory citations
             prompt = f"""You are the lead academic editor for the ImoleWrites Research Hub.
 Process ONLY this specific paragraph. Every paragraph submitted to you requires new literature backing.
 
 1. Polish the academic tone slightly to ensure a natural human tone. DO NOT use em dashes.
 2. You MUST identify factual scientific claims and insert AT LEAST ONE placeholder (like [CITE_1]) into the text. 
-3. Generate highly concise 2 to 3 keyword search queries for those placeholders (e.g., "mass spectrometry", "BPA leachate"). Broad keywords work best.
+3. Generate highly concise 2 to 3 keyword search queries for those placeholders (e.g., "mass spectrometry", "bioinformatics").
 
 You MUST respond strictly in JSON format matching this exact structure:
 {{
@@ -130,7 +142,6 @@ Paragraph to process:
                             revised_para = revised_para.replace(tag, in_text)
                             all_refs.append(apa_ref)
                         else:
-                            # If OpenAlex fails, we no longer hide it. We show you exactly what it searched for.
                             revised_para = revised_para.replace(tag, f"[Manual Citation Needed: {query}]")
                             
                 final_processed_paragraphs.append(revised_para)
@@ -145,7 +156,7 @@ Paragraph to process:
             for ref in unique_refs:
                 display_text += f"{ref}\n\n"
         else:
-            display_text += "No valid Open Access references were found for the generated queries."
+            display_text += "No valid references were found for the generated queries."
 
         html_code = f"""
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; padding: 25px; border-radius: 8px; border: 1px solid #dee2e6; color: #212529; line-height: 1.8; font-size: 16px; white-space: pre-wrap; margin-bottom: 15px;" id="imole-output">
@@ -159,4 +170,4 @@ Paragraph to process:
         
         st.subheader("Final Output")
         components.html(html_code, height=600, scrolling=True)
-            
+        
