@@ -6,21 +6,19 @@ st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
 st.title("🎓 ImoleWrites Smart Citing Agent")
 st.markdown("Powered by Llama 3.3 - Autonomous Multi-Contextual Reading")
 
-# 1. The Hybrid Key Grabber
+# The Hybrid Key Grabber
 try:
-    # First, it tries to pull the key invisibly from Streamlit Secrets
     api_key = st.secrets["GROQ_API_KEY"]
 except Exception:
-    # If you haven't set up the secret yet, it safely falls back to a sidebar box!
     raw_key = st.sidebar.text_input("Secret not found. Enter Groq API Key here:", type="password", key="groq_fallback")
     api_key = raw_key.strip() if raw_key else ""
 
-# 2. Draw the UI immediately so it never disappears
+# Draw the UI immediately
 draft_input = st.text_area("Paste your manuscript draft here:", height=300)
 btn = st.button("Auto-Cite Manuscript", type="primary")
 
 def get_real_journal(query):
-    # Strictly modern journals (post-2018) using your business email
+    # Strictly modern journals (post-2018)
     url = f"https://api.openalex.org/works?search={query}&filter=publication_year:>2018&per-page=1&mailto=imolewriteshub@gmail.com"
     try:
         res = requests.get(url, timeout=10).json()
@@ -43,7 +41,6 @@ def get_real_journal(query):
         pass
     return None, None
 
-# 3. Only run the AI after the button is clicked AND a key exists
 if btn:
     if not api_key:
         st.error("Please provide your Groq API Key to proceed.")
@@ -53,7 +50,7 @@ if btn:
         st.warning("Please paste a manuscript draft first.")
         st.stop()
 
-    with st.spinner("Analyzing claims and dynamically sourcing necessary references..."):
+    with st.spinner("Applying strict academic formatting and sourcing references..."):
         
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -67,11 +64,17 @@ if btn:
         sentences = re.split(r'(?<=[.!?])\s+', draft_input)
         
         for sentence in sentences:
-            if len(sentence.split()) > 8:
+            # Count actual alphabetical words to skip numbers like "1." or "1.1"
+            word_count = len(re.findall(r'\b[a-zA-Z]+\b', sentence))
+            
+            # Check if the sentence already contains a citation format
+            has_citation = bool(re.search(r'\([A-Za-z\s&]+,\s*\d{4}\)', sentence))
+            
+            if word_count > 6 and not has_citation:
                 prompt = f"""You are an expert in analytical and environmental chemistry. Evaluate this manuscript sentence: "{sentence.strip()}"
-If it makes one or more factual scientific claims needing validation, generate as many highly distinct, specific search queries as necessary to fully cover the scope of the claims. 
-Separate multiple search queries strictly using a pipe symbol '|' (e.g., query1 | query2). Each query must be 4 to 7 keywords long and contain clear chemistry domain keywords (e.g., 'chromatography', 'landfill leachate analysis').
-If the sentence is an original deduction, transition, or general linking statement needing no citation, reply ONLY with the word NO."""
+If it makes a factual scientific claim needing validation, generate 1 or 2 (maximum 2) highly distinct search queries for it. 
+Separate queries strictly using a pipe symbol '|'. Each query must be 4 to 6 keywords long and contain chemistry domain keywords.
+If the sentence is an original deduction, a section heading, or needs no citation, reply ONLY with the word NO."""
                 
                 payload = {
                     "model": "llama-3.3-70b-versatile",
@@ -89,15 +92,18 @@ If the sentence is an original deduction, transition, or general linking stateme
                     ai_text = ai_res['choices'][0]['message']['content'].strip().replace('"', '')
                     
                     if ai_text != "NO" and not ai_text.upper().startswith("NO"):
-                        queries = [q.strip() for q in ai_text.split('|') if q.strip()]
+                        # Hard limit to 2 queries maximum
+                        queries = [q.strip() for q in ai_text.split('|') if q.strip()][:2]
                         sentence_citations = []
                         
                         for query in queries:
                             in_text, full_ref = get_real_journal(query)
                             if in_text:
                                 citation_content = in_text.strip("()")
-                                sentence_citations.append(citation_content)
-                                all_refs.append(full_ref)
+                                # Prevent duplicates in the same bracket
+                                if citation_content not in sentence_citations:
+                                    sentence_citations.append(citation_content)
+                                    all_refs.append(full_ref)
                         
                         if sentence_citations:
                             combined_citation = f"({'; '.join(sentence_citations)})"
@@ -110,6 +116,7 @@ If the sentence is an original deduction, transition, or general linking stateme
                 except Exception:
                     processed_text.append(sentence)
             else:
+                # Passes existing citations, headings, and numbers straight through
                 processed_text.append(sentence)
                 
         st.subheader("Finalized Manuscript:")
@@ -120,4 +127,4 @@ If the sentence is an original deduction, transition, or general linking stateme
             unique_refs = list(set(all_refs))
             for ref in unique_refs:
                 st.markdown(f"- {ref}")
-        
+            
