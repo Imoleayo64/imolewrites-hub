@@ -6,7 +6,6 @@ st.set_page_config(page_title="ImoleWrites Agent", layout="wide")
 st.title("🎓 ImoleWrites Smart Citing Agent")
 st.markdown("Powered by Llama 3.3 - Autonomous Contextual Reading")
 
-# Strip invisible spaces from the pasted key
 raw_key = st.sidebar.text_input("Enter your Groq API Key:", type="password")
 api_key = raw_key.strip() if raw_key else ""
 
@@ -38,57 +37,49 @@ draft_input = st.text_area("Paste your manuscript draft here:", height=300)
 btn = st.button("Auto-Cite Manuscript", type="primary")
 
 if btn and api_key and draft_input:
-    with st.spinner("AI is analyzing your manuscript and sourcing modern journals..."):
+    with st.spinner("Analyzing each sentence and sourcing relevant chemistry journals..."):
         
-        # Groq API connection using the active Llama 3.3 model
         groq_url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
-        payload = {
-            "model": "llama-3.3-70b-versatile", # THE FIX IS HERE
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are an expert academic research assistant. Read the text and ignore original analysis or opinion. Find ONLY factual scientific claims that require citations. Return a list of short, highly specific search queries for those claims, separated by a pipe symbol '|'. Do not return the sentences, only the search queries."
-                },
-                {
-                    "role": "user",
-                    "content": draft_input
-                }
-            ],
-            "temperature": 0.1
-        }
         
-        try:
-            ai_response = requests.post(groq_url, headers=headers, json=payload)
-            if ai_response.status_code != 200:
-                st.error(f"Groq API Error ({ai_response.status_code}): {ai_response.text}")
-                st.stop()
-                
-            ai_data = ai_response.json()
-            ai_text = ai_data['choices'][0]['message']['content']
-            search_queries = [q.strip() for q in ai_text.split('|') if q.strip()]
-        except Exception as e:
-            st.error(f"Network failed: {str(e)}")
-            st.stop()
-            
         processed_text = []
         all_refs = []
         
         sentences = re.split(r'(?<=[.!?])\s+', draft_input)
         
         for sentence in sentences:
-            if len(sentence.split()) > 8 and search_queries:
-                query = search_queries.pop(0)
-                in_text, full_ref = get_real_journal(query)
+            if len(sentence.split()) > 8:
+                # We prompt the AI to specialize in your specific field of study
+                prompt = f"""You are an expert in analytical and environmental chemistry. Evaluate this manuscript sentence: "{sentence.strip()}"
+If it makes a factual scientific claim needing a citation, reply ONLY with a highly specific search query (4 to 7 keywords, ensuring you include chemistry domain context like 'chromatography' or 'environmental analysis'). 
+If it is a general statement, transitional, or original thought, reply ONLY with the word NO."""
                 
-                if in_text:
-                    clean_sentence = sentence.rstrip('.!?')
-                    processed_text.append(f"{clean_sentence} {in_text}.")
-                    all_refs.append(full_ref)
-                else:
+                payload = {
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.0
+                }
+                
+                try:
+                    ai_res = requests.post(groq_url, headers=headers, json=payload).json()
+                    ai_text = ai_res['choices'][0]['message']['content'].strip().replace('"', '')
+                    
+                    # If the AI did not say NO, it means we have a targeted query to search
+                    if ai_text != "NO" and not ai_text.upper().startswith("NO"):
+                        in_text, full_ref = get_real_journal(ai_text)
+                        
+                        if in_text:
+                            clean_sentence = sentence.rstrip('.!?')
+                            processed_text.append(f"{clean_sentence} {in_text}.")
+                            all_refs.append(full_ref)
+                        else:
+                            processed_text.append(sentence)
+                    else:
+                        processed_text.append(sentence)
+                except Exception as e:
                     processed_text.append(sentence)
             else:
                 processed_text.append(sentence)
@@ -102,4 +93,3 @@ if btn and api_key and draft_input:
             st.markdown(f"- {ref}")
 elif btn and not api_key:
     st.warning("Please paste your Groq API key in the sidebar before clicking.")
-    
