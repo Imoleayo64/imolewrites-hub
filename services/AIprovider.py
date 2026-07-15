@@ -1,7 +1,17 @@
+import google.generativeai as genai
+from services.config import GEMINI_API_KEY
+
+genai.configure(api_key=GEMINI_API_KEY)
+
+model = genai.GenerativeModel("gemini-2.5-pro")
+
+
 def ask_ai(prompt):
     """
-    Central AI function for ImoleWrites Research Hub.
-    For now, this is just a placeholder.
-    Later, it will connect to Gemini, OpenAI, Groq, Claude, or any other AI provider.
+    Sends a prompt to Gemini and returns the response.
     """
-    return "Gemini not connected yet."
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"Error: {str(e)}"
